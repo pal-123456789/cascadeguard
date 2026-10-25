@@ -3,25 +3,24 @@
 > Recording checklist: 1080p screen recording · quiet room, mic test 10s ·
 > close personal tabs/notifications · one dry run first · demo on the LIVE link.
 
-## Script skeleton (fill during polish window ~2:30)
+## Script — CascadeGuard (fill timings after dry run)
 
-**[0:00–0:10] Hook — the problem**
-> "<Who> struggles with <pain from the problem statement>. <One-line why it matters today>."
+**[0:00–0:12] Hook — the problem**
+> "Outages don't start with a bang — they start with one saturated connection pool that quietly spreads through dependency chains until the whole system is down. CascadeGuard sees that spread before it happens."
 
-**[0:10–0:25] Live demo — core flow on the live link**
-> Show the single most impressive end-to-end action. Do it slowly and successfully.
+**[0:12–0:30] Live demo — core flow**
+> Run the `pool-exhaustion` scenario at 2x. Point at the topology: "This is a live digital twin of an e-commerce cluster. Watch Orders-DB — saturation is creeping. Our predictor flags it 40 seconds before it fails" (violet halo appears). Failure hits — red pulse — "and there's the cascade."
 
-**[0:25–0:45] Key features (max 3)**
-> Feature 1 — what it does for the user.
-> Feature 2 — ...
-> Feature 3 — ...
+**[0:30–0:50] Key features (3)**
+> "One — failure prediction with a measured lead time: the accuracy panel shows precision, recall and seconds-of-warning scored against ground truth, live."
+> "Two — root cause analysis: when the incident opens, CascadeGuard traces the blast radius back upstream and names the origin with evidence from the logs."
+> "Three — the recovery optimizer: it Monte-Carlo simulates seven strategies, thirty rollouts each, and recommends one. Watch — I click Apply, and the cascade is contained."
 
-**[0:45–1:00] Under the hood**
-> "<Stack one-liner>. <The one technical thing worth showing: API/architecture/algorithm>."
+**[0:50–1:05] Under the hood**
+> "Fully client-side TypeScript: a deterministic digital-twin engine feeds a hybrid AI engine — logistic risk scoring plus dependency-graph propagation, upstream root-cause tracing, and Monte Carlo recovery projection — rendered in React with a custom SVG topology. Every prediction is auto-verified against ground truth."
 
-**[1:00–1:15] Honesty + close**
-> "Built for Orcathon 2026 in <X> hours — <pre-built disclosure one-liner>.
-> Live link and repo are in the description."
+**[1:05–1:15] Honesty + close**
+> "Built for Orcathon 2026 in under five hours — architecture and contracts by me, module implementation accelerated with an AI coding agent, fully disclosed. Predict. Trace. Recover. Links below."
 
 ## Rules of thumb
 - Screen + voice only; no intro cards, no music mixing time.
