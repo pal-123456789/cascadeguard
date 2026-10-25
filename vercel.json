@@ -4,13 +4,5 @@
   "devCommand": "pnpm dev",
   "installCommand": "pnpm install",
   "outputDirectory": "dist",
-  "nodeVersion": "22",
-  "github": {
-    "silent": true
-  },
-  "git": {
-    "deploymentEnabled": {
-      "main": true
-    }
-  }
+  "node": "22"
 }
