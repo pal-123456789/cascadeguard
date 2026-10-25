@@ -89,6 +89,17 @@ export interface ServiceState extends ServiceNode {
   metrics: ServiceMetrics
   /** rolling window of recent metrics (oldest first) */
   history: ServiceMetrics[]
+  /**
+   * Observed-healthy baseline: the best (lowest) values this service has
+   * ever shown. Kept outside the rolling history so anomaly detection
+   * stays anchored to "healthy" even after the window has slid past it.
+   */
+  baseline: {
+    errorRate: number
+    saturation: number
+    latencyP99: number
+    memory: number
+  }
 }
 
 // ---------------- AI: Prediction ----------------
@@ -329,5 +340,5 @@ export const SIM = {
   /** max log events kept */
   LOG_WINDOW: 500,
   /** metrics samples per service kept */
-  HISTORY_WINDOW: 120,
+  HISTORY_WINDOW: 240,
 } as const

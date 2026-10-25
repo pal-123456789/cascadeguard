@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-25T08:30:36.538Z",
+  "generatedAt": "2026-10-25T08:42:39.004Z",
   "seed": 42,
   "simMinutes": 12,
   "scenarios": [
@@ -64,7 +64,7 @@
       "bestStrategyId": "restart:orders-db",
       "bestStrategySuccessProbability": 0.37,
       "incidentOpenedAtMs": 60000,
-      "rootCauseHypotheses": 2
+      "rootCauseHypotheses": 3
     },
     {
       "scenarioId": "retry-storm",

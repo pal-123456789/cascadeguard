@@ -12,7 +12,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "smoke": "vite build --ssr src/core/smoke.ts --outDir tmp-smoke-bundle --logLevel error && node tmp-smoke-bundle/smoke.js",
+    "evaluate": "vite build --ssr scripts/evaluate.ts --outDir tmp-eval --logLevel error && node tmp-eval/evaluate.js",
+    "verify": "pnpm typecheck && pnpm smoke && pnpm evaluate && pnpm build"
   },
   "dependencies": {
     "react": "^19.3.1",

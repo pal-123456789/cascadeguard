@@ -36,6 +36,8 @@ interface SimService {
   status: ServiceStatus
   metrics: ServiceMetrics
   history: ServiceMetrics[]
+  /** observed-healthy baseline (lowest values ever seen) */
+  baseline: { errorRate: number; saturation: number; latencyP99: number; memory: number }
   demand: number
   processed: number
   capacityMult: number
@@ -105,6 +107,7 @@ function freshService(node: ServiceNode, ts: number): SimService {
     status: 'healthy',
     metrics: freshMetrics(node, ts),
     history: [],
+    baseline: { errorRate: 0, saturation: 0.1, latencyP99: 1, memory: 0.3 },
     demand: 0,
     processed: 0,
     capacityMult: 1,
@@ -381,6 +384,15 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
     svc.history.push({ ...svc.metrics })
     if (svc.history.length > SIM.HISTORY_WINDOW) svc.history.shift()
 
+    // --- observed-healthy baseline ---
+    // The lowest values this service has ever shown. Unlike the rolling
+    // window this never slides past the healthy period, so anomaly
+    // detection stays anchored no matter how long the run continues.
+    svc.baseline.errorRate = Math.min(svc.baseline.errorRate, svc.metrics.errorRate)
+    svc.baseline.saturation = Math.min(svc.baseline.saturation, svc.metrics.saturation)
+    svc.baseline.latencyP99 = Math.min(svc.baseline.latencyP99, svc.metrics.latencyP99)
+    svc.baseline.memory = Math.min(svc.baseline.memory, svc.metrics.memory)
+
     // --- failure conditions ---
     if (svc.failedAt === null && s.simTime >= svc.downtimeUntil) {
       if (svc.saturation >= 1.2) svc.satStreak++
@@ -497,6 +509,7 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
         status: svc.status,
         metrics: { ...svc.metrics },
         history: svc.history.slice(-SIM.HISTORY_WINDOW),
+        baseline: { ...svc.baseline },
       }
     }
     return {
@@ -722,6 +735,7 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
         status: svc.status,
         metrics: { ...svc.metrics },
         history: svc.history.slice(-SIM.HISTORY_WINDOW),
+        baseline: { ...svc.baseline },
       }
     }
     return {

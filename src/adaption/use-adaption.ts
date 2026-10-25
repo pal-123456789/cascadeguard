@@ -4,7 +4,7 @@
 // to clean simulated telemetry before feeding the predictor.
 // ============================================================
 
-const ADAPTION_KEY = 'pt_live_7365e2c39068eb2e3e743627d8a8001f8cd3cb3d'
+const ADAPTION_KEY = process.env.ADAPTION_KEY || '[REDACTED — rotate per security review]'
 const ADAPTION_ENDPOINT = 'https://api.adaption.ai/v1/data-quality/clean'
 
 export interface TelemetryRecord {

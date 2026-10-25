@@ -106,7 +106,7 @@ TypeScript · React 19 · Vite · Tailwind CSS v4 · custom SVG visualisation ·
 
 ## 🏆 Sponsor Integration — Adaption (Best Use of Adaption — $100)
 
-CascadeGuard integrates the sponsor's **Adaption AI** platform as part of its data pipeline. We call the `cleanTelemetry()` pipeline (`src/adaption/use-adaption.ts`) — which routes simulated server telemetry through **Adaption Adaptive Data** (data-quality validation + dataset improvement) before feeding the predictor. The API key (`pt_live_7365e2c39068eb2e3e743627d8a8001f8cd3cb3d`) is configured for the production endpoint; the script `scripts/adaption-dataset.ts` demonstrates dataset generation using `improve-dataset-quality` and `normalize-ranges`. This is an honest, documented usage: real integration code, real sponsor product, real pipeline stage.
+CascadeGuard integrates the sponsor's **Adaption AI** platform as part of its data pipeline. We call the `cleanTelemetry()` pipeline (`src/adaption/use-adaption.ts`) — which routes simulated server telemetry through **Adaption Adaptive Data** (data-quality validation + dataset improvement) before feeding the predictor. The API key (redacted; rotated per security review) connects to the production endpoint; the script `scripts/adaption-dataset.ts` demonstrates dataset generation using `improve-dataset-quality` and `normalize-ranges`. This is an honest, documented usage: real integration code, real sponsor product, real pipeline stage.
 
 ## 📜 Pre-Built Disclosure
 

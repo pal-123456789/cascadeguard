@@ -26,9 +26,18 @@ interface Onset {
   evidence: string[]
 }
 
+/**
+ * Baseline of a metric = a low percentile of the retained history.
+ * A mean over the oldest third would slide past the healthy baseline once
+ * the window fills with degraded samples, and the onset would stop being
+ * detectable. A low percentile stays anchored to "the best this service
+ * has recently looked like".
+ */
 function baseline(history: ServiceState['history'], pick: (m: ServiceMetrics) => number): number {
-  const win = history.slice(0, Math.max(1, Math.floor(history.length / 3)))
-  return win.reduce((a, m) => a + pick(m), 0) / Math.max(1, win.length)
+  if (history.length === 0) return 0
+  const values = history.map(pick).sort((a, b) => a - b)
+  const idx = Math.min(values.length - 1, Math.floor(values.length * 0.1))
+  return values[idx]!
 }
 
 function detectOnsets(input: DiagnosticsInput): Onset[] {
@@ -36,9 +45,13 @@ function detectOnsets(input: DiagnosticsInput): Onset[] {
   for (const svc of Object.values(input.services)) {
     const h = svc.history
     if (h.length < 4) continue
-    const baseErr = baseline(h, (m) => m.errorRate)
-    const baseSat = baseline(h, (m) => m.saturation)
-    const baseP99 = baseline(h, (m) => m.latencyP99)
+    // Prefer the engine's lifetime observed-healthy baseline: it never
+    // slides past the healthy period, unlike the rolling history window.
+    const b = svc.baseline
+    const baseErr = b && b.errorRate > 0 ? b.errorRate : baseline(h, (m) => m.errorRate)
+    const baseSat = b && b.saturation > 0 ? b.saturation : baseline(h, (m) => m.saturation)
+    const baseP99 = b && b.latencyP99 > 1 ? b.latencyP99 : baseline(h, (m) => m.latencyP99)
+    const baseMem = b && b.memory > 0 ? b.memory : baseline(h, (m) => m.memory)
 
     let onsetIdx = -1
     for (let i = 0; i < h.length; i++) {
@@ -59,7 +72,7 @@ function detectOnsets(input: DiagnosticsInput): Onset[] {
     // heap). A victim inherits its distress from an unhealthy dependency.
     const selfRaw = Math.max(
       recent.saturation - baseSat,
-      recent.memory - (baseline(h, (m) => m.memory) || 0),
+      recent.memory - baseMem,
       0,
     )
     const selfSignal = Math.min(1, selfRaw / 0.4)

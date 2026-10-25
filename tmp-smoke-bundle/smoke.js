@@ -11,7 +11,7 @@ var SIM = {
 	/** max log events kept */
 	LOG_WINDOW: 500,
 	/** metrics samples per service kept */
-	HISTORY_WINDOW: 120
+	HISTORY_WINDOW: 240
 };
 // src/core/engine/logs.ts
 function mulberry32(seed) {
@@ -296,6 +296,12 @@ function freshService(node, ts) {
 		status: "healthy",
 		metrics: freshMetrics(node, ts),
 		history: [],
+		baseline: {
+			errorRate: 0,
+			saturation: .1,
+			latencyP99: 1,
+			memory: .3
+		},
 		demand: 0,
 		processed: 0,
 		capacityMult: 1,
@@ -537,6 +543,10 @@ function createEngine(topology, diagnostics) {
 		};
 		svc.history.push({ ...svc.metrics });
 		if (svc.history.length > SIM.HISTORY_WINDOW) svc.history.shift();
+		svc.baseline.errorRate = Math.min(svc.baseline.errorRate, svc.metrics.errorRate);
+		svc.baseline.saturation = Math.min(svc.baseline.saturation, svc.metrics.saturation);
+		svc.baseline.latencyP99 = Math.min(svc.baseline.latencyP99, svc.metrics.latencyP99);
+		svc.baseline.memory = Math.min(svc.baseline.memory, svc.metrics.memory);
 		if (svc.failedAt === null && s.simTime >= svc.downtimeUntil) {
 			if (svc.saturation >= 1.2) svc.satStreak++;
 			else svc.satStreak = 0;
@@ -628,7 +638,8 @@ function createEngine(topology, diagnostics) {
 			...svc.node,
 			status: svc.status,
 			metrics: { ...svc.metrics },
-			history: svc.history.slice(-SIM.HISTORY_WINDOW)
+			history: svc.history.slice(-SIM.HISTORY_WINDOW),
+			baseline: { ...svc.baseline }
 		};
 		return {
 			tick: s.tick,
@@ -819,7 +830,8 @@ function createEngine(topology, diagnostics) {
 			...svc.node,
 			status: svc.status,
 			metrics: { ...svc.metrics },
-			history: svc.history.slice(-SIM.HISTORY_WINDOW)
+			history: svc.history.slice(-SIM.HISTORY_WINDOW),
+			baseline: { ...svc.baseline }
 		};
 		return {
 			tick: s.tick,
@@ -1132,18 +1144,28 @@ function predictRisks(input, prev) {
 	return out;
 }
 // src/core/ai/rootcause.ts
+/**
+* Baseline of a metric = a low percentile of the retained history.
+* A mean over the oldest third would slide past the healthy baseline once
+* the window fills with degraded samples, and the onset would stop being
+* detectable. A low percentile stays anchored to "the best this service
+* has recently looked like".
+*/
 function baseline(history, pick) {
-	const win = history.slice(0, Math.max(1, Math.floor(history.length / 3)));
-	return win.reduce((a, m) => a + pick(m), 0) / Math.max(1, win.length);
+	if (history.length === 0) return 0;
+	const values = history.map(pick).sort((a, b) => a - b);
+	return values[Math.min(values.length - 1, Math.floor(values.length * .1))];
 }
 function detectOnsets(input) {
 	const onsets = [];
 	for (const svc of Object.values(input.services)) {
 		const h = svc.history;
 		if (h.length < 4) continue;
-		const baseErr = baseline(h, (m) => m.errorRate);
-		const baseSat = baseline(h, (m) => m.saturation);
-		const baseP99 = baseline(h, (m) => m.latencyP99);
+		const b = svc.baseline;
+		const baseErr = b && b.errorRate > 0 ? b.errorRate : baseline(h, (m) => m.errorRate);
+		const baseSat = b && b.saturation > 0 ? b.saturation : baseline(h, (m) => m.saturation);
+		const baseP99 = b && b.latencyP99 > 1 ? b.latencyP99 : baseline(h, (m) => m.latencyP99);
+		const baseMem = b && b.memory > 0 ? b.memory : baseline(h, (m) => m.memory);
 		let onsetIdx = -1;
 		for (let i = 0; i < h.length; i++) {
 			const m = h[i];
@@ -1156,7 +1178,7 @@ function detectOnsets(input) {
 		const recent = h[h.length - 1];
 		const sev = Math.min(1.5, Math.max(recent.errorRate * 2, recent.saturation, recent.cpu));
 		const evidence = [];
-		const selfRaw = Math.max(recent.saturation - baseSat, recent.memory - (baseline(h, (m) => m.memory) || 0), 0);
+		const selfRaw = Math.max(recent.saturation - baseSat, recent.memory - baseMem, 0);
 		const selfSignal = Math.min(1, selfRaw / .4);
 		let depError = 0;
 		for (const e of input.topology.edges) {

@@ -3,7 +3,7 @@
   "project": "CascadeGuard — Orcathon 2026",
   "cleaning_pipeline": ["data-quality", "improve-dataset-quality", "normalize-ranges"],
   "source": "simulated-cluster-telemetry",
-  "adaption_key_ref": "pt_live_7365e2c39068eb2e3e743627d8a8001f8cd3cb3d",
+  "adaption_key_ref": "[REDACTED]",
   "record_count": 8,
   "cleaned_records": [
     {
