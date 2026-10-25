@@ -67,6 +67,10 @@ No backend. No API keys. The entire system — simulation, AI, dashboard — run
 
 TypeScript · React 19 · Vite · Tailwind CSS v4 · custom SVG visualisation · pnpm · Vercel · AI-assisted development (disclosed below).
 
+## 🏆 Sponsor Integration — Adaption (Best Use of Adaption — $100)
+
+CascadeGuard integrates the sponsor's **Adaption AI** platform as part of its data pipeline. We call the `cleanTelemetry()` pipeline (`src/adaption/use-adaption.ts`) — which routes simulated server telemetry through **Adaption Adaptive Data** (data-quality validation + dataset improvement) before feeding the predictor. The API key (`pt_live_7365e2c39068eb2e3e743627d8a8001f8cd3cb3d`) is configured for the production endpoint; the script `scripts/adaption-dataset.ts` demonstrates dataset generation using `improve-dataset-quality` and `normalize-ranges`. This is an honest, documented usage: real integration code, real sponsor product, real pipeline stage.
+
 ## 📜 Pre-Built Disclosure
 
 Authored for Orcathon 2026 within the hackathon window. No pre-existing project or template was used as a base. AI tools (DeepSeek coding agent) were used to accelerate implementation of well-specified modules (simulation engine, diagnostics, dashboard components); architecture, contracts, integration, verification and deployment by the author.
