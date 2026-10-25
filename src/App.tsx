@@ -35,6 +35,23 @@ export default function App() {
   }, [])
 
   const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [openPanelId, setOpenPanelId] = useState<string | null>(null)
+
+  const openPanelComp = openPanelId ? (['incidents','impact','accuracy','risk','ledger','rootcause','recovery','benchmarks','explainable'].find((id) => id === openPanelId) ? (() => {
+    // Return the component for the open panel
+    const map: Record<string, React.ReactNode> = {
+      'incidents': <IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} />,
+      'impact': <ImpactPanel impact={snap.impact} services={snap.services} />,
+      'accuracy': <AccuracyPanel accuracy={snap.accuracy} />,
+      'risk': <RiskPanel risks={snap.risks} services={snap.services} selectedId={selected} tick={snap.tick} scenarioId={snap.scenarioId} />,
+      'ledger': <PredictionLedger ledger={snap.ledger} services={snap.services} />,
+      'rootcause': <RootCausePanel hypotheses={snap.rootCauses} services={snap.services} />,
+      'recovery': <RecoveryPanel projections={snap.projections} appliedStrategies={snap.appliedStrategies} services={snap.services} />,
+      'benchmarks': <BenchmarksPanel />,
+      'explainable': <ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} />,
+    }
+    return map[openPanelId] || null
+  })() : null) : null
 
   const [judgeTour, setJudgeTour] = useState<number | null>(
     typeof window !== 'undefined' && window.location.search.includes('judge=1') ? 0 : null,
@@ -253,8 +270,8 @@ export default function App() {
             <div
               key={sec.id}
               className={`panel-scroll rounded-xl border border-edge bg-panel transition-all duration-300 cursor-pointer hover:border-slate-600 ${expandedSection === sec.id ? 'max-h-[600px]' : 'max-h-[200px]'}`}
-              onClick={() => setExpandedSection(expandedSection === sec.id ? null : sec.id)}
-              title={expandedSection === sec.id ? 'Click to collapse' : 'Click to expand'}
+              onClick={() => setOpenPanelId(sec.id)}
+              title="Click to open full panel"
             >
               <div className={`${expandedSection === sec.id ? 'p-3' : 'p-2 overflow-hidden'}`}>
                 {sec.comp}
@@ -271,6 +288,26 @@ export default function App() {
           onClose={() => setSelected(null)}
           onApplyStrategy={(id) => actions.applyStrategy(id)}
         />
+      )}
+
+      {openPanelId && (
+        <div className="fixed inset-0 z-[70] bg-void/90 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-edge bg-panel shadow-[0_0_60px_rgba(56,189,248,0.1)] p-6">
+            <button onClick={() => setOpenPanelId(null)} className="absolute top-3 right-3 text-xs font-mono text-slate-500 hover:text-white border border-edge rounded px-2 py-0.5">CLOSE</button>
+            <h3 className="text-lg font-extrabold text-white mb-4">{['incidents','impact','accuracy','risk','ledger','rootcause','recovery','benchmarks','explainable'].find((id) => id === openPanelId) ? ({'incidents':'INCIDENTS','impact':'BUSINESS IMPACT & SLO','accuracy':'MODEL ACCURACY','risk':'FAILURE PREDICTIONS','ledger':'PREDICTION LEDGER','rootcause':'ROOT CAUSE ANALYSIS','recovery':'RECOVERY STRATEGY OPTIMIZER','benchmarks':'MEASURED BENCHMARKS','explainable':'EXPLAINABLE AI'} as Record<string,string>)[openPanelId] : ''}</h3>
+            <div className="space-y-4">
+              {openPanelId === 'incidents' && <IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} />}
+              {openPanelId === 'impact' && <ImpactPanel impact={snap.impact} services={snap.services} />}
+              {openPanelId === 'accuracy' && <AccuracyPanel accuracy={snap.accuracy} />}
+              {openPanelId === 'risk' && <RiskPanel risks={snap.risks} services={snap.services} selectedId={selected} tick={snap.tick} scenarioId={snap.scenarioId} />}
+              {openPanelId === 'ledger' && <PredictionLedger ledger={snap.ledger} services={snap.services} />}
+              {openPanelId === 'rootcause' && <RootCausePanel hypotheses={snap.rootCauses} services={snap.services} />}
+              {openPanelId === 'recovery' && <RecoveryPanel projections={snap.projections} appliedStrategies={snap.appliedStrategies} services={snap.services} />}
+              {openPanelId === 'benchmarks' && <BenchmarksPanel />}
+              {openPanelId === 'explainable' && <ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} />}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Footer ─────────────────────────────────────────────── */}
