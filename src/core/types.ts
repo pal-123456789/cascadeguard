@@ -291,7 +291,7 @@ export const SIM = {
   /** prediction horizon, sim ms */
   RISK_HORIZON_MS: 120_000,
   /** risk above this counts as an active prediction */
-  RISK_THRESHOLD: 0.62,
+  RISK_THRESHOLD: 0.52,
   /** max log events kept */
   LOG_WINDOW: 500,
   /** metrics samples per service kept */

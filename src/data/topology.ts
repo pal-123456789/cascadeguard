@@ -12,9 +12,9 @@ export const SEED_TOPOLOGY: ServiceTopology = {
     { id: 'orders-api', name: 'Orders API', kind: 'api', capacity: 2000, criticality: 0.9, replicas: 3, layout: { x: 320, y: 200 } },
     { id: 'payments-api', name: 'Payments API', kind: 'api', capacity: 1600, criticality: 0.95, replicas: 2, layout: { x: 540, y: 200 } },
     { id: 'inventory-api', name: 'Inventory API', kind: 'api', capacity: 1800, criticality: 0.7, replicas: 2, layout: { x: 740, y: 200 } },
-    { id: 'orders-db', name: 'Orders DB', kind: 'database', capacity: 900, criticality: 0.95, replicas: 1, layout: { x: 150, y: 380 } },
+    { id: 'orders-db', name: 'Orders DB', kind: 'database', capacity: 2300, criticality: 0.95, replicas: 1, layout: { x: 150, y: 380 } },
     { id: 'redis-cache', name: 'Redis Cache', kind: 'cache', capacity: 9000, criticality: 0.6, replicas: 1, layout: { x: 360, y: 380 } },
-    { id: 'payments-db', name: 'Payments DB', kind: 'database', capacity: 700, criticality: 0.9, replicas: 1, layout: { x: 580, y: 380 } },
+    { id: 'payments-db', name: 'Payments DB', kind: 'database', capacity: 1500, criticality: 0.9, replicas: 1, layout: { x: 580, y: 380 } },
     { id: 'kafka-events', name: 'Kafka Events', kind: 'queue', capacity: 6000, criticality: 0.75, replicas: 3, layout: { x: 760, y: 380 } },
   ],
   edges: [

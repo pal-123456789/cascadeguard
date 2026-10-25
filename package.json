@@ -1,8 +1,12 @@
-﻿{
+{
   "name": "cascadeguard",
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "description": "CascadeGuard - AI system that predicts cascading software failures, identifies root causes, and recommends optimal recovery strategies before the system crashes.",
   "scripts": {
     "dev": "vite",

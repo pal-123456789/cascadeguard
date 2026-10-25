@@ -1,5 +1,6 @@
 // Headless integration smoke test — runs engine + AI modules in Node.
 // Build with esbuild, run with node. Asserts the demo story end-to-end.
+declare const process: { exit(code: number): void }
 import { createEngine } from './engine/sim'
 import { predictRisks } from './ai/predictor'
 import { analyzeRootCauses } from './ai/rootcause'
@@ -27,6 +28,7 @@ const ok = (cond: boolean, label: string) => {
 
 engine.loadScenario(SCENARIOS[0].id, 42)
 engine.setSpeed(20)
+engine.start()
 
 let maxRiskSeen = 0
 let predictedBeforeFailure = false
