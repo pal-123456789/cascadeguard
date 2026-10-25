@@ -31,7 +31,7 @@ CascadeGuard **predicts cascading software failures, identifies their root cause
 
 ## Evaluation and verification
 
-The simulation knows which service actually failed and when, so every prediction is scored automatically. Two harnesses run the **real** engine and AI headless: `src/core/smoke.ts` (9 assertions, all passing) and `src/core/eval/evaluation.ts` via `scripts/evaluate.ts`, replaying all 4 scenarios at seed 42 into `docs/evaluation-report.json`. That report measures **avg lead time 75 s, origin accuracy 75 %, avg precision 75 %, avg recall 100 %, 6 hits / 0 missed**. The **Measured Benchmarks** panel renders that same JSON, so the dashboard cannot drift from the report.
+The simulation knows which service actually failed and when, so every prediction is scored automatically. Two harnesses run the **real** engine and AI headless: `src/core/smoke.ts` (9 assertions, all passing) and `src/core/eval/evaluation.ts` via `scripts/evaluate.ts`, replaying all 4 scenarios at seed 42 into `docs/evaluation-report.json`. That report measures **avg lead time 75 s, origin accuracy 100 % (4 / 4 scenarios), avg precision 75 %, avg recall 100 %, 6 hits / 0 missed**. The **Measured Benchmarks** panel renders that same JSON, so the dashboard cannot drift from the report.
 
 ## Disclosure
 

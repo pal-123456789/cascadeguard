@@ -33,8 +33,18 @@ export default function App() {
     setSelected((prev) => (prev === id ? null : id))
   }, [])
 
+  const [judgeTour, setJudgeTour] = useState<number | null>(
+    typeof window !== 'undefined' && window.location.search.includes('judge=1') ? 0 : null,
+  )
+  useEffect(() => {
+    if (judgeTour === null) return
+    if (judgeTour >= 4) { setJudgeTour(null); return }
+    const t = setTimeout(() => setJudgeTour((p) => (p === null ? null : p + 1)), 5500)
+    return () => clearTimeout(t)
+  }, [judgeTour])
+
   // keyboard shortcuts: space = run/pause, 1/2/4 = speed, R = restart scenario,
-  // E = export incident report, Esc = close drawer
+  // E = export incident report, Esc = close drawer, G = guided judge tour
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -44,6 +54,8 @@ export default function App() {
         actions.toggleRun()
       } else if (e.key === '1' || e.key === '2' || e.key === '4') {
         actions.setSpeed(Number(e.key))
+      } else if (e.key.toLowerCase() === 'g') {
+        setJudgeTour((prev) => (prev === null ? 0 : prev + 1))
       } else if (e.key.toLowerCase() === 'r') {
         actions.loadScenario(snap.scenarioId)
       } else if (e.key.toLowerCase() === 'e') {
@@ -267,6 +279,49 @@ export default function App() {
         </span>
         <span className="font-mono">Orcathon 2026 · CascadeGuard</span>
       </footer>
+
+      {/* Judge-mode guided demo overlay */}
+      {judgeTour !== null && (
+        <div className="fixed inset-0 z-[60] pointer-events-none">
+          <div className="absolute inset-4 rounded-2xl border border-sky-400/30 bg-void/80 backdrop-blur-md shadow-[0_0_60px_rgba(56,189,248,0.15)] flex flex-col pointer-events-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-edge">
+              <div className="text-sm font-extrabold tracking-tight text-white">GUIDED DEMO <span className="text-sky-400 text-xs font-normal">(press G again to skip · Esc to close)</span></div>
+              <button onClick={() => setJudgeTour(null)} className="text-[11px] font-mono text-slate-400 hover:text-white border border-edge rounded px-2 py-0.5">SKIP</button>
+            </div>
+            <div className="flex-1 px-6 py-5 overflow-y-auto">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-slate-500 mb-3">Step {judgeTour + 1} of 4</div>
+              {judgeTour === 0 && (
+                <div>
+                  <h3 className="text-xl font-extrabold text-white mb-2">1. Select the scenario</h3>
+                  <p className="text-sm text-slate-300 mb-3">Pick <strong>Connection Pool Exhaustion</strong> from the dropdown. Press 2 for 2× speed. Watch Orders DB — saturation is creeping.</p>
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300 font-mono">ACTION: Click scenario dropdown → Connection Pool Exhaustion</div>
+                </div>
+              )}
+              {judgeTour === 1 && (
+                <div>
+                  <h3 className="text-xl font-extrabold text-white mb-2">2. Watch the prediction</h3>
+                  <p className="text-sm text-slate-300 mb-3">A violet PREDICTION halo appears before failure. The Prediction Ledger turns green: <strong>✓ HIT · 120s early</strong>.</p>
+                  <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2 text-xs text-violet-300 font-mono">ACTION: Look for the violet ring and ledger row</div>
+                </div>
+              )}
+              {judgeTour === 2 && (
+                <div>
+                  <h3 className="text-xl font-extrabold text-white mb-2">3. Root cause + recovery</h3>
+                  <p className="text-sm text-slate-300 mb-3">Root Cause names <strong>orders-db</strong> (not the loudest API). Recovery recommends <strong>failover:orders-db @ 100%</strong> — click APPLY and the cascade is contained.</p>
+                  <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-300 font-mono">ACTION: Open Root Cause → click Recovery panel → APPLY</div>
+                </div>
+              )}
+              {judgeTour === 3 && (
+                <div>
+                  <h3 className="text-xl font-extrabold text-white mb-2">4. Export the evidence</h3>
+                  <p className="text-sm text-slate-300 mb-3">Press <strong>E</strong> to download the incident report (Markdown). It contains the prediction ledger, root-cause chain, recovery comparison and business impact.</p>
+                  <div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-2 text-xs text-sky-300 font-mono">ACTION: Press E → open downloaded incident-report.md</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
