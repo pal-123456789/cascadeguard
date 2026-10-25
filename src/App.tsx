@@ -13,6 +13,7 @@ import RecoveryPanel from './components/RecoveryPanel'
 import RiskPanel from './components/RiskPanel'
 import RootCausePanel from './components/RootCausePanel'
 import ServiceDetail from './components/ServiceDetail'
+import ExplainablePanel from './components/ExplainablePanel'
 import Topology from './components/Topology'
 
 const SCENARIO_LIST: readonly ScenarioDef[] = Array.isArray(SCENARIOS) ? SCENARIOS : []
@@ -254,6 +255,7 @@ export default function App() {
             services={snap.services}
           />
           <BenchmarksPanel />
+          <ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} />
         </aside>
       </main>
 
