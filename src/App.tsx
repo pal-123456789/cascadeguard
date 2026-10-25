@@ -252,14 +252,11 @@ export default function App() {
           ].map((sec) => (
             <div
               key={sec.id}
-              className={`panel-scroll rounded-xl border border-edge bg-panel transition-all duration-300 cursor-pointer hover:border-slate-600 ${expandedSection === sec.id ? 'max-h-[500px]' : 'max-h-[240px]'}`}
+              className={`panel-scroll rounded-xl border border-edge bg-panel transition-all duration-300 cursor-pointer hover:border-slate-600 ${expandedSection === sec.id ? 'max-h-[600px]' : 'max-h-[200px]'}`}
               onClick={() => setExpandedSection(expandedSection === sec.id ? null : sec.id)}
+              title={expandedSection === sec.id ? 'Click to collapse' : 'Click to expand'}
             >
-              <div className="flex items-center justify-between px-3 py-1.5 border-b border-edge bg-panel2/40">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">{sec.label}</span>
-                <span className="text-[9px] font-mono text-slate-600">{expandedSection === sec.id ? '▼ collapse' : '▶ expand'}</span>
-              </div>
-              <div className={`${expandedSection === sec.id ? 'p-3' : 'p-2'}`}>
+              <div className={`${expandedSection === sec.id ? 'p-3' : 'p-2 overflow-hidden'}`}>
                 {sec.comp}
               </div>
             </div>
