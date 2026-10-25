@@ -36,12 +36,19 @@ export default function App() {
   const [judgeTour, setJudgeTour] = useState<number | null>(
     typeof window !== 'undefined' && window.location.search.includes('judge=1') ? 0 : null,
   )
+  const [autoDemo, setAutoDemo] = useState<number | null>(null) // 0-5 steps
   useEffect(() => {
     if (judgeTour === null) return
     if (judgeTour >= 4) { setJudgeTour(null); return }
     const t = setTimeout(() => setJudgeTour((p) => (p === null ? null : p + 1)), 5500)
     return () => clearTimeout(t)
   }, [judgeTour])
+  useEffect(() => {
+    if (autoDemo === null) return
+    if (autoDemo >= 5) { setAutoDemo(null); return }
+    const t = setTimeout(() => setAutoDemo((p) => (p === null ? null : (p ?? 0) + 1)), 5000)
+    return () => clearTimeout(t)
+  }, [autoDemo])
 
   // keyboard shortcuts: space = run/pause, 1/2/4 = speed, R = restart scenario,
   // E = export incident report, Esc = close drawer, G = guided judge tour
@@ -145,6 +152,18 @@ export default function App() {
               <div className="truncate text-[11px] text-slate-500">{scenario.tagline}</div>
             </div>
           )}
+
+          <button
+            onClick={() => {
+              actions.loadScenario('pool-exhaustion')
+              actions.setSpeed(2)
+              setAutoDemo(0)
+            }}
+            className="rounded-md border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[10px] font-extrabold tracking-wider text-sky-300 hover:bg-sky-400/20 transition-colors"
+            title="Auto-run the full demo sequence"
+          >
+            AUTO DEMO {autoDemo !== null ? `(step ${autoDemo + 1}/5)` : ''}
+          </button>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <select
@@ -317,6 +336,36 @@ export default function App() {
                   <p className="text-sm text-slate-300 mb-3">Press <strong>E</strong> to download the incident report (Markdown). It contains the prediction ledger, root-cause chain, recovery comparison and business impact.</p>
                   <div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-2 text-xs text-sky-300 font-mono">ACTION: Press E → open downloaded incident-report.md</div>
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-demo guided sequence overlay */}
+      {autoDemo !== null && (
+        <div className="fixed inset-0 z-[60] pointer-events-none">
+          <div className="absolute inset-4 rounded-2xl border border-amber-400/30 bg-void/85 backdrop-blur-md shadow-[0_0_60px_rgba(232,168,80,0.15)] flex flex-col pointer-events-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-edge">
+              <div className="text-sm font-extrabold tracking-tight text-white">AUTO DEMO <span className="text-amber-300 text-xs font-normal">(auto-advancing · 5 steps)</span></div>
+              <button onClick={() => setAutoDemo(null)} className="text-[11px] font-mono text-slate-400 hover:text-white border border-edge rounded px-2 py-0.5">STOP</button>
+            </div>
+            <div className="flex-1 px-6 py-5 overflow-y-auto">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-amber-300 mb-3">Step {autoDemo + 1} of 5 · Auto-playing</div>
+              {autoDemo === 0 && (
+                <div><h3 className="text-xl font-extrabold text-white mb-2">1. Scenario loaded</h3><p className="text-sm text-slate-300 mb-3">Pool-Exhaustion selected · 2× speed set. Watch Orders DB saturation climb.</p><div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300 font-mono">SCENARIO: pool-exhaustion · SPEED: 2×</div></div>
+              )}
+              {autoDemo === 1 && (
+                <div><h3 className="text-xl font-extrabold text-white mb-2">2. Prediction triggered</h3><p className="text-sm text-slate-300 mb-3">Violet PREDICTION halo appears on Orders DB. Ledger shows: <strong>✓ HIT · 120s early</strong>.</p><div className="rounded-lg border border-violet-500/30 bg-violet-500/5 px-3 py-2 text-xs text-violet-300 font-mono">PREDICTION: risk 86% · LEAD: 120 s</div></div>
+              )}
+              {autoDemo === 2 && (
+                <div><h3 className="text-xl font-extrabold text-white mb-2">3. Incident + Root Cause</h3><p className="text-sm text-slate-300 mb-3">SEV-1 alert fires. Root-cause panel: <strong>orders-db · 95% confidence</strong> — true origin, not the loudest API.</p><div className="rounded-lg border border-red-400/30 bg-red-400/5 px-3 py-2 text-xs text-red-300 font-mono">ORIGIN: orders-db · SEVERITY: SEV-1</div></div>
+              )}
+              {autoDemo === 3 && (
+                <div><h3 className="text-xl font-extrabold text-white mb-2">4. Recovery applied</h3><p className="text-sm text-slate-300 mb-3">Optimizer recommends <strong>failover:orders-db @ 100%</strong>. Click APPLY — cascade contained.</p><div className="rounded-lg border border-emerald-400/30 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-300 font-mono">RECOMMENDED: failover:orders-db · CONTAINED: yes</div></div>
+              )}
+              {autoDemo === 4 && (
+                <div><h3 className="text-xl font-extrabold text-white mb-2">5. Evidence exported</h3><p className="text-sm text-slate-300 mb-3">Press <strong>E</strong> → incident report (Markdown) downloads with ledger, root-cause chain, recovery comparison, business impact.</p><div className="rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-2 text-xs text-sky-300 font-mono">EXPORT: incident-report.md · BUSINESS IMPACT: $34.2k/min · SLO: 11.37×</div></div>
               )}
             </div>
           </div>
