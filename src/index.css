@@ -66,3 +66,21 @@ body {
   stroke-dasharray: 6 6;
   animation: dash-flow 1s linear infinite;
 }
+
+/* Scroll isolation for sidebar sub-sections */
+.panel-scroll {
+  overflow-y: auto;
+  max-height: 260px;
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b transparent;
+}
+.panel-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}

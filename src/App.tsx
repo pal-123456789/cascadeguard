@@ -237,25 +237,25 @@ export default function App() {
         </div>
 
         <aside className="flex flex-col gap-3 lg:sticky lg:top-[57px] lg:max-h-[calc(100vh-65px)] lg:overflow-y-auto lg:pr-0.5">
-          <IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} />
-          <ImpactPanel impact={snap.impact} services={snap.services} />
-          <AccuracyPanel accuracy={snap.accuracy} />
-          <RiskPanel
+          <div className="panel-scroll"><IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} /></div>
+          <div className="panel-scroll"><ImpactPanel impact={snap.impact} services={snap.services} /></div>
+          <div className="panel-scroll"><AccuracyPanel accuracy={snap.accuracy} /></div>
+          <div className="panel-scroll"><RiskPanel
             risks={snap.risks}
             services={snap.services}
             selectedId={selected}
             tick={snap.tick}
             scenarioId={snap.scenarioId}
-          />
-          <PredictionLedger ledger={snap.ledger} services={snap.services} />
-          <RootCausePanel hypotheses={snap.rootCauses} services={snap.services} />
-          <RecoveryPanel
+          /></div>
+          <div className="panel-scroll"><PredictionLedger ledger={snap.ledger} services={snap.services} /></div>
+          <div className="panel-scroll"><RootCausePanel hypotheses={snap.rootCauses} services={snap.services} /></div>
+          <div className="panel-scroll"><RecoveryPanel
             projections={snap.projections}
             appliedStrategies={snap.appliedStrategies}
             services={snap.services}
-          />
-          <BenchmarksPanel />
-          <ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} />
+          /></div>
+          <div className="panel-scroll"><BenchmarksPanel /></div>
+          <div className="panel-scroll"><ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} /></div>
         </aside>
       </main>
 
