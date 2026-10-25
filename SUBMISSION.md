@@ -3,31 +3,46 @@
 > Final submission deadline: **25 Oct 2026, 3:30 PM IST** · internal target **3:15 PM IST**
 > Solo participant: Jay Ghevariya (pal-123456789)
 
-## Required fields (all must be filled before 3:15)
+## Locked decisions (11:15 AM)
 
-- [ ] **Project Name** — TBD (decide by 11:30)
-- [ ] **Live Project Link** — TBD (Vercel; verify logged-out access + mobile viewport)
-- [ ] **GitHub Repository Link** — TBD (public repo; verify judges can open it)
-- [ ] **Video Explanation** — TBD (script drafted by 2:30, recorded + uploaded by 3:10)
-- [ ] **Tools Used** — TBD (languages, frameworks, APIs, DBs, AI tools, hosting — final list at 3:00)
-- [ ] **Participant Details** — Jay Ghevariya (solo)
-- [ ] **Pre-Built Project Disclosure** — TBD (honest statement; AI tools + templates disclosed)
+- **Project:** 🛡️ **CascadeGuard** — cascading failure prediction, root-cause tracing, recovery optimization
+- **Track:** 01 Software & AI (31 votes)
+- **Stack:** TypeScript · React 19 · Vite · Tailwind v4 · custom SVG · fully client-side
+- **Repo name:** `cascadeguard` (public, under pal-123456789)
+- **Deploy:** Vercel (user imports GitHub repo manually)
+
+## Required fields
+
+- [x] **Project Name** — CascadeGuard
+- [ ] **Live Project Link** — TBD (Vercel; verify logged-out + mobile)
+- [ ] **GitHub Repository Link** — TBD (push by ~12:00, import Vercel right after)
+- [ ] **Video Explanation** — script in VIDEO_SCRIPT.md; record ~3:00–3:10
+- [ ] **Tools Used** — TypeScript, React 19, Vite 8, Tailwind CSS v4, custom SVG, pnpm, Vercel, AI-assisted dev (DeepSeek)
+- [x] **Participant Details** — Jay Ghevariya (solo)
+- [x] **Pre-Built Disclosure** — drafted in README; nothing pre-existed; AI-assisted modules disclosed
+
+## Sponsor prize: "Best Use of Adaption" ($100)
+
+Requires using a sponsor product called **Adaption** — ⚠️ need the user to say what/where it is (sponsor email / WhatsApp).
+If identified in time: integrate minimally + explain in submission + select that category.
 
 ## Judging self-check (100 pts)
 
 | Criterion | Pts | Self-score | Evidence |
 |---|---|---|---|
-| Functionality & execution | 25 | — | core flow works end-to-end on the live link |
-| Innovation & originality | 20 | — | the one novel angle: |
-| Technical implementation | 20 | — | real engineering beyond template CRUD |
-| UI/UX & usability | 15 | — | responsive, clean first impression |
-| Problem relevance | 10 | — | directly solves the stated PS |
-| Presentation & explanation | 10 | — | video + README quality |
+| Functionality & execution | 25 | — | live sim + working dashboard, verified deploy |
+| Innovation & originality | 20 | — | live-verified prediction accuracy vs ground truth |
+| Technical implementation | 20 | — | digital twin + graph propagation + Monte Carlo optimizer |
+| UI/UX & usability | 15 | — | mission-control design, animated topology |
+| Problem relevance | 10 | — | exactly the PS: predict/trace/recommend before crash |
+| Presentation & explanation | 10 | — | README + video script ready early |
 
 ## Timeline guards
 
-- [ ] 11:00 — PS received → scope locked by 11:15
-- [ ] 12:00–1:00 — scaffold pushed to GitHub → user imports to Vercel (live link exists)
+- [x] 11:00 — PS received → scope locked 11:15
+- [ ] ~11:35 — agents land (engine / AI / UI)
+- [ ] ~11:50 — integrated + typecheck + build verified
+- [ ] ~12:00 — pushed to GitHub → user imports to Vercel (live link exists)
 - [ ] 2:30 — feature freeze; polish only
 - [ ] 2:45 — final deploy verified (logged-out browser check)
 - [ ] 3:10 — video recorded & uploaded
