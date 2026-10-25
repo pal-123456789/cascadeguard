@@ -19,6 +19,10 @@ interface Onset {
   service: ServiceId
   ts: number
   severity: number
+  /** 0..1 — how much of the distress is self-inflicted (own leading indicators) */
+  selfSignal: number
+  /** 0..1 — how much of the error rate is explained by unhealthy dependencies */
+  depShare: number
   evidence: string[]
 }
 
@@ -49,6 +53,24 @@ function detectOnsets(input: DiagnosticsInput): Onset[] {
     const recent = h[h.length - 1]
     const sev = Math.min(1.5, Math.max(recent.errorRate * 2, recent.saturation, recent.cpu))
     const evidence: string[] = []
+
+    // --- self-inflicted vs dependency-explained -------------------------
+    // A root cause degrades on its own terms (a leaking pool, a creeping
+    // heap). A victim inherits its distress from an unhealthy dependency.
+    const selfRaw = Math.max(
+      recent.saturation - baseSat,
+      recent.memory - (baseline(h, (m) => m.memory) || 0),
+      0,
+    )
+    const selfSignal = Math.min(1, selfRaw / 0.4)
+    let depError = 0
+    for (const e of input.topology.edges) {
+      if (e.from !== svc.id || !e.critical) continue
+      const dep = input.services[e.to]
+      if (!dep) continue
+      depError += e.weight * dep.metrics.errorRate
+    }
+    const depShare = Math.min(1, depError / Math.max(0.05, recent.errorRate))
     if (recent.saturation > baseSat + 0.15) {
       evidence.push(`${svc.name} saturation ${recent.saturation.toFixed(2)} (baseline ${baseSat.toFixed(2)})`)
     }
@@ -58,7 +80,7 @@ function detectOnsets(input: DiagnosticsInput): Onset[] {
     if (recent.latencyP99 > baseP99 * 2) {
       evidence.push(`${svc.name} p99 latency ${recent.latencyP99}ms (baseline ${Math.round(baseP99)}ms)`)
     }
-    onsets.push({ service: svc.id, ts: h[onsetIdx].ts, severity: sev, evidence })
+    onsets.push({ service: svc.id, ts: h[onsetIdx].ts, severity: sev, selfSignal, depShare, evidence })
   }
   return onsets
 }
@@ -121,7 +143,10 @@ export function analyzeRootCauses(input: DiagnosticsInput): RootCauseHypothesis[
     const path = bestPath(o.service, affected, adj)
     const strength = path ? Math.max(0.05, path.strength) : 0.02
     const precedence = Math.exp(-(o.ts - t0) / 30_000)
-    const score = o.severity * precedence * (0.4 + 0.6 * strength)
+    // self-inflicted distress points at the origin; dependency-explained
+    // distress points at a victim further up the stack
+    const originBias = 0.35 * o.severity + 0.65 * o.selfSignal
+    const score = originBias * precedence * (0.4 + 0.6 * strength) * (1 - 0.45 * o.depShare)
     return { onset: o, path, strength, precedence, score }
   })
 

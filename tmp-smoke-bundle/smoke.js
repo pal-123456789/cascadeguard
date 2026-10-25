@@ -418,7 +418,7 @@ function createEngine(topology, diagnostics) {
 				const gw = s.services.get(gatewayId ?? "");
 				const redis = s.services.get("redis-cache");
 				if (t >= 2e4 && t < 2e5) {
-					if (gw) gw.demandMult = 1 + 2 * clamp((t - 2e4) / 75e3, 0, 1);
+					if (gw) gw.demandMult = 1 + 2 * clamp((t - 2e4) / 12e4, 0, 1);
 					if (redis) redis.capacityMult = Math.min(redis.capacityMult, .45);
 				} else if (t >= 2e5) {
 					if (gw) gw.demandMult = 1.05;
@@ -438,10 +438,10 @@ function createEngine(topology, diagnostics) {
 	/** retry amplification factor for caller→callee edge at current sim time */
 	function retryFactorFor(from, to) {
 		if (s.scenarioId === "retry-storm" && from.node.id === "payments-api" && to.node.id === "payments-db") {
-			if (s.simTime >= 25e3 && s.simTime <= 85e3) return 3;
+			if (s.simTime >= 25e3 && s.simTime <= 85e3) return 3 * clamp((s.simTime - 25e3) / 2e4, .15, 1);
 		}
 		if (to.status === "failed") return 2.5;
-		if (to.metrics.errorRate > .3) return 2;
+		if (to.metrics.errorRate > .1) return 2 * Math.min(1, (to.metrics.errorRate - .1) / .4);
 		return 0;
 	}
 	function effectiveCapacity(svc) {
@@ -516,7 +516,10 @@ function createEngine(topology, diagnostics) {
 		const errorRate = svc.failedAt !== null ? .95 : clamp(Math.max(errFromUtil, depError * .6), 0, .98);
 		const pileup = .4 * Math.max(0, util - .9) + svc.backlog / (svc.backlog + 400);
 		if (svc.memLeakRate > 0) svc.memory = clamp(svc.memory + svc.memLeakRate + pileup * .2, .05, 1.25);
-		else svc.memory = clamp(svc.memory + (pileup - (svc.memory - .3)) * .25, .05, 1.25);
+		else {
+			const loadPressure = Math.min(pileup, .02);
+			svc.memory = clamp(svc.memory + (loadPressure - (svc.memory - .3)) * .25, .05, 1.25);
+		}
 		const targetSat = svc.node.kind === "api" ? clamp(svc.backlog / 300, 0, 1.25) : clamp(util, 0, 1.25);
 		svc.saturation = clamp(svc.saturation + (targetSat - svc.saturation) * .3 + svc.leakRate, .05, 1.3);
 		svc.metrics = {
@@ -539,7 +542,7 @@ function createEngine(topology, diagnostics) {
 			else svc.satStreak = 0;
 			if (errorRate >= .92) svc.errStreak++;
 			else svc.errStreak = 0;
-			const oom = svc.memory >= 1.05;
+			const oom = svc.memory >= 1.05 && svc.memLeakRate > 0;
 			if (oom || svc.satStreak >= 6 || svc.errStreak >= 5) failService(svc, oom ? "oom" : svc.failureCause ?? "error");
 		}
 	}
@@ -906,7 +909,7 @@ var W_SAT = 2.4;
 var W_ERR = .8;
 var W_CPU = .5;
 var W_LAT = .45;
-var W_SLOPE_MEM = 8;
+var W_SLOPE_MEM = 14;
 var W_SLOPE_SAT = 10;
 var W_SLOPE_ERR = 1.4;
 var W_LOG = .9;
@@ -1153,6 +1156,16 @@ function detectOnsets(input) {
 		const recent = h[h.length - 1];
 		const sev = Math.min(1.5, Math.max(recent.errorRate * 2, recent.saturation, recent.cpu));
 		const evidence = [];
+		const selfRaw = Math.max(recent.saturation - baseSat, recent.memory - (baseline(h, (m) => m.memory) || 0), 0);
+		const selfSignal = Math.min(1, selfRaw / .4);
+		let depError = 0;
+		for (const e of input.topology.edges) {
+			if (e.from !== svc.id || !e.critical) continue;
+			const dep = input.services[e.to];
+			if (!dep) continue;
+			depError += e.weight * dep.metrics.errorRate;
+		}
+		const depShare = Math.min(1, depError / Math.max(.05, recent.errorRate));
 		if (recent.saturation > baseSat + .15) evidence.push(`${svc.name} saturation ${recent.saturation.toFixed(2)} (baseline ${baseSat.toFixed(2)})`);
 		if (recent.errorRate > baseErr + .05) evidence.push(`${svc.name} error rate ${(recent.errorRate * 100).toFixed(0)}% (baseline ${(baseErr * 100).toFixed(1)}%)`);
 		if (recent.latencyP99 > baseP99 * 2) evidence.push(`${svc.name} p99 latency ${recent.latencyP99}ms (baseline ${Math.round(baseP99)}ms)`);
@@ -1160,6 +1173,8 @@ function detectOnsets(input) {
 			service: svc.id,
 			ts: h[onsetIdx].ts,
 			severity: sev,
+			selfSignal,
+			depShare,
 			evidence
 		});
 	}
@@ -1225,7 +1240,7 @@ function analyzeRootCauses(input) {
 			path,
 			strength,
 			precedence,
-			score: o.severity * precedence * (.4 + .6 * strength)
+			score: (.35 * o.severity + .65 * o.selfSignal) * precedence * (.4 + .6 * strength) * (1 - .45 * o.depShare)
 		};
 	});
 	scored.sort((a, b) => b.score - a.score);
@@ -1316,125 +1331,177 @@ function rng(seed) {
 		return ((t ^ t >>> 14) >>> 0) / 4294967296;
 	};
 }
+/** Topological order (callers before callees) so demand flows downstream correctly. */
+function topoOrder(nodeIds, edges) {
+	const indeg = new Map(nodeIds.map((n) => [n, 0]));
+	for (const e of edges) indeg.set(e.to, (indeg.get(e.to) ?? 0) + 1);
+	const queue = nodeIds.filter((n) => (indeg.get(n) ?? 0) === 0);
+	const out = [];
+	while (queue.length > 0) {
+		const n = queue.shift();
+		out.push(n);
+		for (const e of edges) {
+			if (e.from !== n) continue;
+			const v = (indeg.get(e.to) ?? 1) - 1;
+			indeg.set(e.to, v);
+			if (v === 0) queue.push(e.to);
+		}
+	}
+	for (const n of nodeIds) if (!out.includes(n)) out.push(n);
+	return out;
+}
 function projectStrategies(input) {
 	const incident = input.incidents.find((i) => i.resolvedAt === void 0);
 	if (!incident) return [];
 	const nodes = input.topology.nodes;
-	const idx = new Map(nodes.map((n, i) => [n.id, i]));
 	const edges = input.topology.edges;
-	const initial = {
-		util: nodes.map((n) => input.services[n.id]?.metrics.cpu ?? .2),
-		failed: nodes.map((n) => input.services[n.id]?.metrics.failed ?? false),
-		failedAt: nodes.map((n) => input.services[n.id]?.metrics.failed ? 0 : -1)
-	};
-	const initiallyFailed = initial.failed.filter(Boolean).length;
-	incident.origin && idx.get(incident.origin);
+	const idx = new Map(nodes.map((n, i) => [n.id, i]));
+	const order = topoOrder(nodes.map((n) => n.id), edges);
+	const initialUtil = nodes.map((n) => {
+		const s = input.services[n.id];
+		if (!s) return .2;
+		return Math.min(1.1, .5 * s.metrics.cpu + .5 * s.metrics.saturation);
+	});
+	const initialFailed = nodes.map((n) => input.services[n.id]?.metrics.failed ?? false);
+	const initiallyFailed = initialFailed.filter(Boolean).length;
 	const capBase = nodes.map((n) => n.capacity);
-	const demand = nodes.map((n) => input.services[n.id]?.metrics.rps ?? n.capacity * .5);
+	const demand = nodes.map((n, i) => {
+		const live = input.services[n.id]?.metrics.rps ?? n.capacity * .5;
+		return Math.min(live, capBase[i] * .9);
+	});
+	const originIdx = incident.origin ? idx.get(incident.origin) ?? 0 : 0;
+	const gatewayIdx = nodes.findIndex((n) => n.kind === "gateway");
+	const cacheIdx = nodes.findIndex((n) => n.kind === "cache");
+	new Set(edges.filter((e) => nodes[idx.get(e.to) ?? 0]?.kind === "cache").map((e) => e.from));
 	const runRollout = (strategy, seed) => {
 		const r = rng(seed);
-		const st = {
-			util: [...initial.util],
-			failed: [...initial.failed],
-			failedAt: [...initial.failedAt]
-		};
+		const util = [...initialUtil];
+		const failed = [...initialFailed];
+		const failedAt = nodes.map(() => -1);
 		const caps = [...capBase];
 		const dem = [...demand];
+		const processed = nodes.map(() => 0);
 		let breakerEdge = null;
+		let cacheBypassed = false;
 		if (strategy) {
 			const [kind, targetId] = strategy.split(":");
 			const ti = targetId ? idx.get(targetId) ?? -1 : -1;
 			if (kind === "scale-up" && ti >= 0) caps[ti] *= 1.5;
 			if (kind === "failover" && ti >= 0) {
 				caps[ti] *= 1.8;
-				st.failed[ti] = false;
-				st.failedAt[ti] = -1;
+				failed[ti] = false;
+				failedAt[ti] = -1;
 			}
 			if (kind === "restart" && ti >= 0) {
-				st.util[ti] = .35;
-				st.failed[ti] = false;
-				st.failedAt[ti] = -1;
+				util[ti] = .35;
+				failed[ti] = false;
+				failedAt[ti] = -1;
 			}
-			if (kind === "shed-load") dem[0] *= .6;
-			if (kind === "throttle") dem[0] *= .75;
+			if (kind === "shed-load" && gatewayIdx >= 0) dem[gatewayIdx] *= .6;
+			if (kind === "throttle" && gatewayIdx >= 0) dem[gatewayIdx] *= .75;
 			if (kind === "circuit-breaker") {
 				let bestW = 0;
-				for (const e of edges) if (e.to === incident.origin && e.weight > bestW) {
-					bestW = e.weight;
-					breakerEdge = {
-						from: idx.get(e.from) ?? 0,
-						to: idx.get(e.to) ?? 0
-					};
+				for (const e of edges) {
+					const to = idx.get(e.to) ?? -1;
+					if (to === originIdx && e.weight > bestW) {
+						bestW = e.weight;
+						breakerEdge = {
+							from: idx.get(e.from) ?? 0,
+							to
+						};
+					}
 				}
 			}
-			if (kind === "cache-bypass") {
-				for (const e of edges) if (nodes[idx.get(e.to) ?? 0]?.kind === "cache") dem[idx.get(e.to) ?? 0] = 0;
+			if (kind === "cache-bypass" && cacheIdx >= 0) {
+				cacheBypassed = true;
+				dem[cacheIdx] = 0;
+				for (const e of edges) {
+					const to = idx.get(e.to) ?? -1;
+					if (nodes[to]?.kind === "cache") {
+						const from = idx.get(e.from) ?? -1;
+						for (const e2 of edges) if ((idx.get(e2.from) ?? -1) === from && (idx.get(e2.to) ?? -1) !== to) dem[idx.get(e2.to) ?? 0] += demand[to] * e2.weight;
+					}
+				}
 			}
 		}
 		let damage = 0;
-		let cascadeSize = 0;
 		let mttr = HORIZON_STEPS * STEP_MS;
 		for (let step = 0; step < HORIZON_STEPS; step++) {
 			for (const e of edges) {
 				const fi = idx.get(e.from) ?? 0;
 				const ti = idx.get(e.to) ?? 0;
 				if (breakerEdge && breakerEdge.from === fi && breakerEdge.to === ti) continue;
-				if (st.failed[ti]) dem[fi] = dem[fi] * 1.002 + e.weight * 4;
+				if (cacheBypassed && nodes[ti]?.kind === "cache") continue;
+				const spill = util[ti] > .85 ? (util[ti] - .85) * .45 : 0;
+				const retry = failed[ti] ? .06 : 0;
+				dem[fi] += processed[fi] * e.weight * (spill + retry);
 			}
-			for (let i = 0; i < nodes.length; i++) {
-				if (st.failed[i]) {
-					const pRecover = nodes[i].kind === "database" || nodes[i].kind === "api" ? .004 : .015;
+			for (const id of order) {
+				const i = idx.get(id) ?? 0;
+				if (failed[i]) {
+					processed[i] = 0;
+					const pRecover = nodes[i]?.kind === "database" || nodes[i]?.kind === "api" ? .004 : .015;
 					if (r() < pRecover) {
-						st.failed[i] = false;
-						st.failedAt[i] = -1;
-						st.util[i] = .4;
+						failed[i] = false;
+						failedAt[i] = -1;
+						util[i] = .4;
 						mttr = Math.min(mttr, step * STEP_MS);
-					} else st.util[i] = Math.min(1.3, st.util[i]);
+					}
 					continue;
 				}
 				const u = dem[i] / Math.max(1, caps[i]);
-				st.util[i] = st.util[i] + (u - st.util[i]) * .5;
-				if (st.util[i] > 1.15 && r() < .25) {
-					st.failed[i] = true;
-					st.failedAt[i] = step;
+				util[i] = util[i] + (u - util[i]) * .5;
+				if (util[i] > 1.15) {
+					const pFail = Math.min(.35, (util[i] - 1.15) * .5);
+					if (r() < pFail) {
+						failed[i] = true;
+						failedAt[i] = step;
+					}
 				}
-				const health = st.util[i] > .8 ? 1 - (st.util[i] - .8) * 2.5 : 1;
-				damage += nodes[i].criticality * (1 - Math.max(0, health)) * (STEP_MS / 1e3);
+				processed[i] = Math.min(dem[i], caps[i] * .98);
+				const health = util[i] > .8 ? 1 - (util[i] - .8) * 2.5 : 1;
+				damage += (nodes[i]?.criticality ?? .5) * (1 - Math.max(0, health)) * (STEP_MS / 1e3);
 			}
-			if (strategy?.startsWith("restart") && step === 3) {
+			if (strategy?.startsWith("restart")) {
 				const ti = idx.get(strategy.split(":")[1] ?? "") ?? -1;
-				if (ti >= 0) st.util[ti] = Math.min(st.util[ti], .45);
+				if (ti >= 0 && step === 3) {
+					util[ti] = Math.min(util[ti], .45);
+					failed[ti] = false;
+					failedAt[ti] = -1;
+				}
 			}
 		}
-		const newFailures = st.failed.filter((f, i) => f && !initial.failed[i]).length;
-		const endFailed = st.failed.filter(Boolean).length;
-		cascadeSize = endFailed;
+		const newFailures = failed.filter((f, i) => f && !initialFailed[i]).length;
+		const endFailed = failed.filter(Boolean).length;
 		return {
 			newFailures,
 			endFailed,
 			damage,
-			cascadeSize,
-			mttr: st.failed.every((f) => !f) ? mttr : HORIZON_STEPS * STEP_MS
+			cascadeSize: endFailed,
+			mttr: failed.every((f) => !f) ? mttr : HORIZON_STEPS * STEP_MS
 		};
 	};
+	const seeds = Array.from({ length: ROLLOUTS }, (_, i) => input.tick * 131 + i * 17);
 	let baseContained = 0;
 	let baseDamage = 0;
 	let baseSize = 0;
-	for (let i = 0; i < ROLLOUTS; i++) {
-		const out = runRollout(null, input.tick * 131 + i * 17);
+	for (const seed of seeds) {
+		const out = runRollout(null, seed);
 		if (out.newFailures === 0) baseContained++;
 		baseDamage += out.damage;
 		baseSize += out.cascadeSize;
 	}
+	const baseSuccess = baseContained / ROLLOUTS;
+	const baseAvgDamage = baseDamage / ROLLOUTS;
 	const projections = [{
 		strategyId: "no-action",
-		successProbability: Number((baseContained / ROLLOUTS).toFixed(2)),
+		successProbability: Number(baseSuccess.toFixed(2)),
 		expectedCascadeSize: Number((baseSize / ROLLOUTS).toFixed(1)),
-		expectedDamage: Math.round(baseDamage / ROLLOUTS),
+		expectedDamage: Math.round(baseAvgDamage),
 		mttrMs: HORIZON_STEPS * STEP_MS,
 		cost: 0,
 		verdict: "not-recommended",
-		rationale: `Unmitigated: cascade contained in only ${Math.round(baseContained / ROLLOUTS * 100)}% of rollouts, ~${Math.round(baseDamage / ROLLOUTS / 1e3)}k user-seconds damage.`
+		rationale: `Unmitigated: cascade contained in only ${Math.round(baseSuccess * 100)}% of ${ROLLOUTS} paired rollouts, ~${Math.round(baseAvgDamage / 1e3)}k user-seconds of damage.`
 	}];
 	for (const strat of STRATEGY_CATALOG) {
 		let target;
@@ -1448,8 +1515,8 @@ function projectStrategies(input) {
 		let damage = 0;
 		let size = 0;
 		let mttr = 0;
-		for (let i = 0; i < ROLLOUTS; i++) {
-			const out = runRollout(id, input.tick * 131 + i * 17 + 7);
+		for (const seed of seeds) {
+			const out = runRollout(id, seed);
 			if (out.newFailures === 0 && out.endFailed <= initiallyFailed) contained++;
 			damage += out.damage;
 			size += out.cascadeSize;
@@ -1458,8 +1525,9 @@ function projectStrategies(input) {
 		const success = contained / ROLLOUTS;
 		const avgDamage = damage / ROLLOUTS;
 		const cost = COST[strat.kind] + (target === incident.origin ? 10 : 0);
-		const score = success - .25 * (cost / 100) - .1 * (avgDamage / 5e4);
-		const verdict = success >= .5 && score >= Math.max(.35, 0) ? "recommended" : score >= .3 ? "viable" : "not-recommended";
+		const lift = success - baseSuccess;
+		const damageLift = baseAvgDamage - avgDamage;
+		const verdict = success >= .5 && lift > 0 && score(success, cost, avgDamage) > 0 ? "recommended" : success >= .4 && lift >= 0 ? "viable" : "not-recommended";
 		projections.push({
 			strategyId: id,
 			successProbability: Number(success.toFixed(2)),
@@ -1468,11 +1536,14 @@ function projectStrategies(input) {
 			mttrMs: Math.round(mttr / ROLLOUTS),
 			cost,
 			verdict,
-			rationale: `Contains cascade in ${Math.round(success * 100)}% of ${ROLLOUTS} rollouts · ~${Math.round(avgDamage / 1e3)}k user-seconds damage (vs ${Math.round(baseDamage / ROLLOUTS / 1e3)}k unabated) · MTTR ~${Math.round(mttr / ROLLOUTS / 1e3)}s${target ? ` on ${target}` : ""}.`
+			rationale: `Contains cascade in ${Math.round(success * 100)}% of ${ROLLOUTS} paired rollouts (no-action: ${Math.round(baseSuccess * 100)}%) · ${lift >= 0 ? "+" : ""}${Math.round(lift * 100)}pt lift · ~${Math.round(avgDamage / 1e3)}k user-seconds damage (${damageLift >= 0 ? "saves" : "costs"} ${Math.round(Math.abs(damageLift) / 1e3)}k vs no-action) · MTTR ~${Math.round(mttr / ROLLOUTS / 1e3)}s${target ? ` on ${target}` : ""}.`
 		});
 	}
 	const rank = (p) => (p.verdict === "recommended" ? 2 : p.verdict === "viable" ? 1 : 0) * 1e3 + p.successProbability * 100 - p.cost;
 	return projections.sort((a, b) => rank(b) - rank(a));
+}
+function score(success, cost, damage) {
+	return success - .25 * (cost / 100) - .1 * (damage / 5e4);
 }
 // src/core/ai/accuracy.ts
 var trackers = /* @__PURE__ */ new Map();
