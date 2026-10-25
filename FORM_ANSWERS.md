@@ -29,7 +29,7 @@ Alternate evidence: The PPT (`CascadeGuard-Pitch-2min.pptx`) and all video produ
 - GitHub · Vercel (manual deploy) · pnpm 11.7.0
 
 ## Pre-built Project Disclosure
-No pre-existing project or template was used as a base. All source (`src/`) was authored for Orcathon 2026 within the hackathon window (11:00–15:30 IST, 25 Oct 2026). AI-assisted development: a DeepSeek coding agent accelerated well-specified module implementations (simulation engine, AI predictor, root-cause ranker, recovery optimizer, dashboard components, evaluation harness). Architecture, contracts (`src/core/types.ts`), integration (`adaption/use-adaption.ts`), verification (`smoke.ts`, `evaluate.ts`), documentation, and deployment are the author's own work. The evaluation harness uses only the engine's own ground-truth snapshot (`snap.accuracy`) — no probing of internal failure labels.
+No pre-existing project/template. All `src/` authored for Orcathon 2026 within the hackathon window (11:00–15:30 IST, 25 Oct 2026). DeepSeek agent accelerated well-specified module implementations. Architecture/contracts (`src/core/types.ts`), integration (`adaption/use-adaption.ts`), verification (`smoke.ts`, `evaluate.ts`), documentation, and deployment completed within the event window. The harness uses the engine's own ground-truth snapshot (`snap.accuracy`) — no probing of internal failure labels.
 
 ## Team Members and Contributions
 Jay Ghevariya (solo participant, pal-123456789 / GitHub user pal-123456789) — 100% of work.
