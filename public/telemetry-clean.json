@@ -1,0 +1,82 @@
+{
+  "dataset_id": "cascadeguard-telemetry-v1",
+  "project": "CascadeGuard — Orcathon 2026",
+  "cleaning_pipeline": ["data-quality", "improve-dataset-quality", "normalize-ranges"],
+  "source": "simulated-cluster-telemetry",
+  "adaption_key_ref": "pt_live_7365e2c39068eb2e3e743627d8a8001f8cd3cb3d",
+  "record_count": 8,
+  "cleaned_records": [
+    {
+      "timestamp_ms": 11000,
+      "service": "orders-db",
+      "normalized_latency_ms": 0.123,
+      "normalized_saturation": 0.87,
+      "normalized_memory": 0.45,
+      "cleaned_label": "pre-failure-creep",
+      "note": "Pool saturation rising; connection pool utilization approaching exhaustion."
+    },
+    {
+      "timestamp_ms": 11300,
+      "service": "orders-db",
+      "normalized_latency_ms": 0.156,
+      "normalized_saturation": 0.94,
+      "normalized_memory": 0.52,
+      "cleaned_label": "critical-saturation",
+      "note": "Pool fully saturated; retry storm amplifying upstream pressure."
+    },
+    {
+      "timestamp_ms": 13200,
+      "service": "payments-api",
+      "normalized_latency_ms": 0.022,
+      "normalized_saturation": 0.31,
+      "normalized_memory": 0.30,
+      "cleaned_label": "healthy-baseline",
+      "note": "Service healthy; no anomaly detected."
+    },
+    {
+      "timestamp_ms": 13500,
+      "service": "edge-gateway",
+      "normalized_latency_ms": 0.045,
+      "normalized_saturation": 0.72,
+      "normalized_memory": 0.42,
+      "cleaned_label": "degraded-upstream-pressure",
+      "note": "Upstream timeout rate rising; gateway under stress."
+    },
+    {
+      "timestamp_ms": 14800,
+      "service": "orders-api",
+      "normalized_latency_ms": 0.210,
+      "normalized_saturation": 0.89,
+      "normalized_memory": 0.78,
+      "cleaned_label": "cascade-spread",
+      "note": "Retry amplification from orders-db failure increasing load."
+    },
+    {
+      "timestamp_ms": 15500,
+      "service": "payments-db",
+      "normalized_latency_ms": 0.018,
+      "normalized_saturation": 0.22,
+      "normalized_memory": 0.35,
+      "cleaned_label": "healthy-isolated",
+      "note": "Not directly affected by cascade path at this timestep."
+    },
+    {
+      "timestamp_ms": 17100,
+      "service": "redis-cache",
+      "normalized_latency_ms": 0.006,
+      "normalized_saturation": 0.85,
+      "normalized_memory": 0.68,
+      "cleaned_label": "cache-pressure",
+      "note": "Eviction rate rising; optional dependency showing strain."
+    },
+    {
+      "timestamp_ms": 18900,
+      "service": "kafka-events",
+      "normalized_latency_ms": 0.032,
+      "normalized_saturation": 0.41,
+      "normalized_memory": 0.29,
+      "cleaned_label": "queue-stress",
+      "note": "Consumer lag increasing; queue depth within safe range."
+    }
+  ]
+}

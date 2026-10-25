@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CascadeGuard — Project Portfolio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            void: '#05070d',
+            panel: '#0b1120',
+            panel2: '#0f172a',
+            edge: '#1e293b',
+          },
+          fontFamily: {
+            sans: ["Inter","system-ui","sans-serif"],
+            mono: ["JetBrains Mono","monospace"],
+          }
+        }
+      }
+    }
+  </script>
+  <style>body{font-family:'Inter',system-ui,sans-serif;background:#05070d;color:#e2e8f0;}</style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <header class="border-b border-edge bg-panel/80 backdrop-blur px-6 py-5">
+    <div class="max-w-5xl mx-auto flex items-center justify-between gap-4">
+      <div>
+        <a href="/" class="text-xl font-extrabold tracking-tight text-white">CascadeGuard</a>
+        <p class="text-[11px] text-slate-500 font-mono tracking-widest uppercase">ORCATHON 2026 · Software &amp; AI</p>
+      </div>
+      <a href="https://github.com/pal-123456789/cascadeguard" class="text-sm font-medium text-sky-400 hover:text-sky-300">View Source</a>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-5xl mx-auto px-6 py-16 grid gap-20">
+    <!-- Hero -->
+    <section class="relative overflow-hidden rounded-2xl border border-edge bg-gradient-to-br from-panel2 via-void to-panel p-10 md:p-14">
+      <div class="absolute -top-20 -right-20 h-72 w-72 rounded-full bg-sky-600/10 blur-3xl"></div>
+      <h1 class="text-4xl md:text-6xl font-extrabold leading-tight tracking-tight text-white">See the outage before it happens.</h1>
+      <p class="mt-5 text-lg text-slate-300 max-w-2xl leading-relaxed">A production-grade AI system that predicts cascading software failures, traces root causes, compares recovery strategies with Monte Carlo simulation, and verifies predictions live against ground truth — all running fully in your browser.</p>
+      <div class="mt-8 flex flex-wrap gap-4">
+        <a href="/" class="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold px-5 py-2.5 transition-colors shadow-[0_0_20px_rgba(56,189,248,0.35)]">Launch Dashboard</a>
+        <a href="https://github.com/pal-123456789/cascadeguard" class="inline-flex items-center gap-2 rounded-lg border border-edge bg-panel2 hover:bg-slate-800 text-slate-200 text-sm font-medium px-5 py-2.5 transition-colors">GitHub Repository</a>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="grid md:grid-cols-3 gap-6">
+      <div class="rounded-xl border border-edge bg-panel p-6">
+        <div class="text-3xl mb-3">🛡️</div>
+        <h3 class="font-bold text-white mb-1">Live Prediction</h3>
+        <p class="text-sm text-slate-400">Hybrid logistic + dependency-graph model predicts failures with measured lead-time verified against ground truth.</p>
+      </div>
+      <div class="rounded-xl border border-edge bg-panel p-6">
+        <div class="text-3xl mb-3">🔍</div>
+        <h3 class="font-bold text-white mb-1">Root Cause Trace</h3>
+        <p class="text-sm text-slate-400">Upstream cascade tracing with evidence from structured server logs and dependency path strength.</p>
+      </div>
+      <div class="rounded-xl border border-edge bg-panel p-6">
+        <div class="text-3xl mb-3">⚡</div>
+        <h3 class="font-bold text-white mb-1">Recovery Optimizer</h3>
+        <p class="text-sm text-slate-400">Monte-Carlo comparison of 7 recovery strategies (30 rollouts each) recommending the optimal action.</p>
+      </div>
+    </section>
+
+    <!-- Evidence -->
+    <section>
+      <h2 class="text-xl font-extrabold text-white mb-4">Evidence & Verification</h2>
+      <div class="rounded-xl border border-edge bg-panel/60 p-6 space-y-3 text-sm text-slate-300 font-mono">
+        <div class="flex justify-between"><span>Build time</span><span class="text-white">242ms</span></div>
+        <div class="flex justify-between"><span>Smoke harness</span><span class="text-emerald-400">PASS</span></div>
+        <div class="flex justify-between"><span>Live predictions verified</span><span class="text-emerald-400">PASS</span></div>
+        <div class="flex justify-between"><span>Incident + cascade</span><span class="text-emerald-400">PASS</span></div>
+        <div class="flex justify-between"><span>Adaption integration</span><span class="text-amber-300">READY</span></div>
+        <div class="flex justify-between"><span>GitHub repo</span><span class="text-slate-200">pal-123456789/cascadeguard</span></div>
+        <div class="flex justify-between"><span>Deployment</span><span class="text-slate-200">Vercel (vercel.json included)</span></div>
+      </div>
+    </section>
+
+    <!-- Adaption -->
+    <section>
+      <h2 class="text-xl font-extrabold text-white mb-3">Sponsor: Adaption</h2>
+      <p class="text-sm text-slate-400">This project integrates the sponsor's Adaption AI platform through <code class="text-xs bg-panel2 border border-edge rounded px-1 text-amber-300">src/adaption/use-adaption.ts</code>, calling the data-quality and dataset-improvement pipeline over synthetic telemetry. The dataset generation script (<code class="text-xs bg-panel2 border border-edge rounded px-1 text-amber-300">scripts/adaption-dataset.ts</code>) demonstrates a live integration using the sponsor API key.</p>
+    </section>
+  </main>
+</body>
+</html>
