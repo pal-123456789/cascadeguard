@@ -34,6 +34,8 @@ export default function App() {
     setSelected((prev) => (prev === id ? null : id))
   }, [])
 
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
+
   const [judgeTour, setJudgeTour] = useState<number | null>(
     typeof window !== 'undefined' && window.location.search.includes('judge=1') ? 0 : null,
   )
@@ -237,25 +239,31 @@ export default function App() {
         </div>
 
         <aside className="flex flex-col gap-3 lg:sticky lg:top-[57px] lg:max-h-[calc(100vh-65px)] lg:overflow-y-auto lg:pr-0.5">
-          <div className="panel-scroll"><IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} /></div>
-          <div className="panel-scroll"><ImpactPanel impact={snap.impact} services={snap.services} /></div>
-          <div className="panel-scroll"><AccuracyPanel accuracy={snap.accuracy} /></div>
-          <div className="panel-scroll"><RiskPanel
-            risks={snap.risks}
-            services={snap.services}
-            selectedId={selected}
-            tick={snap.tick}
-            scenarioId={snap.scenarioId}
-          /></div>
-          <div className="panel-scroll"><PredictionLedger ledger={snap.ledger} services={snap.services} /></div>
-          <div className="panel-scroll"><RootCausePanel hypotheses={snap.rootCauses} services={snap.services} /></div>
-          <div className="panel-scroll"><RecoveryPanel
-            projections={snap.projections}
-            appliedStrategies={snap.appliedStrategies}
-            services={snap.services}
-          /></div>
-          <div className="panel-scroll"><BenchmarksPanel /></div>
-          <div className="panel-scroll"><ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} /></div>
+          {[
+            { id: 'incidents', label: 'INCIDENTS', comp: <IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} /> },
+            { id: 'impact', label: 'BUSINESS IMPACT & SLO', comp: <ImpactPanel impact={snap.impact} services={snap.services} /> },
+            { id: 'accuracy', label: 'MODEL ACCURACY', comp: <AccuracyPanel accuracy={snap.accuracy} /> },
+            { id: 'risk', label: 'FAILURE PREDICTIONS', comp: <RiskPanel risks={snap.risks} services={snap.services} selectedId={selected} tick={snap.tick} scenarioId={snap.scenarioId} /> },
+            { id: 'ledger', label: 'PREDICTION LEDGER', comp: <PredictionLedger ledger={snap.ledger} services={snap.services} /> },
+            { id: 'rootcause', label: 'ROOT CAUSE ANALYSIS', comp: <RootCausePanel hypotheses={snap.rootCauses} services={snap.services} /> },
+            { id: 'recovery', label: 'RECOVERY STRATEGY OPTIMIZER', comp: <RecoveryPanel projections={snap.projections} appliedStrategies={snap.appliedStrategies} services={snap.services} /> },
+            { id: 'benchmarks', label: 'MEASURED BENCHMARKS', comp: <BenchmarksPanel /> },
+            { id: 'explainable', label: 'EXPLAINABLE AI', comp: <ExplainablePanel service={selected ? snap.services[selected] ?? null : Object.values(snap.services).find((s) => s.status !== 'healthy') ?? null} /> },
+          ].map((sec) => (
+            <div
+              key={sec.id}
+              className={`panel-scroll rounded-xl border border-edge bg-panel transition-all duration-300 cursor-pointer hover:border-slate-600 ${expandedSection === sec.id ? 'max-h-[500px]' : 'max-h-[240px]'}`}
+              onClick={() => setExpandedSection(expandedSection === sec.id ? null : sec.id)}
+            >
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-edge bg-panel2/40">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">{sec.label}</span>
+                <span className="text-[9px] font-mono text-slate-600">{expandedSection === sec.id ? '▼ collapse' : '▶ expand'}</span>
+              </div>
+              <div className={`${expandedSection === sec.id ? 'p-3' : 'p-2'}`}>
+                {sec.comp}
+              </div>
+            </div>
+          ))}
         </aside>
       </main>
 
