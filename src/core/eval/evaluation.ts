@@ -16,30 +16,22 @@
 // subscription to sample the world.
 //
 // ACCURACY TRACKER ISOLATION
-// `trackAccuracy` keeps its counters in MODULE-level state, so a
-// single tracker instance would leak predictions from one scenario
-// into the next. To keep every scenario independent we:
-//   1. read the tracker's cumulative counters BEFORE the scenario,
-//   2. run the scenario,
-//   3. FLUSH the tracker (expire every still-open prediction) and
-//      read the cumulative counters again,
-//   4. report the DELTA as this scenario's statistics.
-// The flush happens after the scenario's numbers are captured, so a
-// prediction that was still open at the end of the window is booked
-// as a false alarm of the scenario that made it — and it is already
-// part of the next scenario's baseline, so it never leaks.
+// The accuracy tracker keeps its counters in module-level state, so
+// every scenario starts with resetAccuracyTracker(). The engine's own
+// snapshot.accuracy is the authoritative tracker output; a baseline is
+// captured at scenario start and the per-scenario statistics are the
+// delta between the final and the baseline snapshot.
 // ============================================================
 
 import { createEngine } from '../engine/sim'
 import { predictRisks } from '../ai/predictor'
 import { analyzeRootCauses } from '../ai/rootcause'
 import { projectStrategies } from '../ai/recovery'
-import { trackAccuracy } from '../ai/accuracy'
+import { trackAccuracy, resetAccuracyTracker } from '../ai/accuracy'
 import { SEED_TOPOLOGY } from '../../data/topology'
 import { SCENARIOS } from '../engine/scenarios'
 import type {
   AccuracyStats,
-  DiagnosticsInput,
   Incident,
   ScenarioDef,
   ServiceId,
@@ -55,7 +47,7 @@ const SIM_MS = 12 * 60_000
 export const SIM_MINUTES = 12
 /** engine seed — every scenario is replayed with the same seed */
 export const EVAL_SEED = 42
-/** engine speed multiplier (20 steps of 3s per 600ms tick) */
+/** engine speed multiplier (steps of 3s sim per 600ms tick) */
 const ENGINE_SPEED_DEFAULT = 20
 /** wall-clock guard per scenario (ms) */
 const SCENARIO_TIMEOUT_MS = 40_000
@@ -69,6 +61,8 @@ export interface ScenarioEvaluation {
   timeToFirstFailureMs: number
   /** sim-ms between the earliest PREDICTION (risk >= SIM.RISK_THRESHOLD) and the actual failure of the same service */
   predictionLeadTimeMs: number | null
+  /** the same lead time expressed in seconds (null when there was no lead) */
+  predictedLeadTimeSec: number | null
   /** service the evaluator judged as the origin */
   predictedOrigin: string | null
   trueOrigin: string | null
@@ -107,30 +101,21 @@ export interface EvaluationReport {
   }
 }
 
-// ---------------- tracker helpers -------------------------------
+// ---------------- helpers ---------------------------------------
 
-/** A DiagnosticsInput that carries no services / risks — used to read
- *  the tracker's cumulative counters without changing them. */
-function probeInput(simTime: number): DiagnosticsInput {
+const diff = (final: number, baseline: number): number => Math.max(0, final - baseline)
+
+/** per-scenario accuracy statistics = final snapshot − baseline snapshot */
+function accuracyDelta(final: AccuracyStats, baseline: AccuracyStats): AccuracyStats {
   return {
-    tick: 0,
-    simTime,
-    topology: SEED_TOPOLOGY,
-    services: {},
-    logs: [],
-    incidents: [],
+    predictions: diff(final.predictions, baseline.predictions),
+    hits: diff(final.hits, baseline.hits),
+    missed: diff(final.missed, baseline.missed),
+    falseAlarms: diff(final.falseAlarms, baseline.falseAlarms),
+    avgLeadTimeMs: final.avgLeadTimeMs,
+    precision: diff(final.precision, baseline.precision),
+    recall: diff(final.recall, baseline.recall),
   }
-}
-
-/** Read the tracker's cumulative counters (no side effects: simTime 0
- *  never expires a pending prediction, and there are no services/risks). */
-function readTracker(): AccuracyStats {
-  return trackAccuracy(probeInput(0), {})
-}
-
-/** Expire every still-open prediction so the next scenario starts clean. */
-function flushTracker(): AccuracyStats {
-  return trackAccuracy(probeInput(Number.MAX_SAFE_INTEGER), {})
 }
 
 // ---------------- per-scenario runner --------------------------
@@ -139,6 +124,10 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
   return new Promise<ScenarioEvaluation>((resolveScenario) => {
     const g = globalThis as { __CG_SPEED__?: number; __CG_DEBUG__?: boolean }
     const engineSpeed = g.__CG_SPEED__ ?? ENGINE_SPEED_DEFAULT
+
+    // fresh tracker state for every scenario
+    resetAccuracyTracker()
+
     const engine = createEngine(SEED_TOPOLOGY, {
       predict: predictRisks,
       rootCause: analyzeRootCauses,
@@ -146,8 +135,11 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
       accuracy: trackAccuracy,
     })
 
-    // baseline of the (shared) accuracy tracker before this scenario
-    const baseline = readTracker()
+    engine.loadScenario(scenario.id, EVAL_SEED)
+    engine.setSpeed(engineSpeed)
+
+    // baseline: the tracker's counters right after the scenario is loaded
+    const baseline = engine.snapshot().accuracy
 
     // --- collectors -------------------------------------------------
     let firstFailureAt: number | null = null
@@ -171,14 +163,9 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
       unsub()
       engine.pause()
 
-      // flush the shared tracker: expire open predictions and read the
-      // cumulative counters for this scenario.
-      const final = flushTracker()
-      const hits = Math.max(0, final.hits - baseline.hits)
-      const missed = Math.max(0, final.missed - baseline.missed)
-      const falseAlarms = Math.max(0, final.falseAlarms - baseline.falseAlarms)
-
       const snap = finalSnapshot
+      const acc = accuracyDelta(snap?.accuracy ?? baseline, baseline)
+
       // --- prediction lead time -------------------------------------
       let lead: number | null = null
       if (firstFailureAt !== null && firstFailedService !== null) {
@@ -200,7 +187,7 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
         const fallback = lastProjections
           .filter((p) => p.strategyId !== 'no-action')
           .reduce<(StrategyProjection | null)>(
-            (acc, p) => (acc === null || p.successProbability > acc.successProbability ? p : acc),
+            (acc2, p) => (acc2 === null || p.successProbability > acc2.successProbability ? p : acc2),
             null,
           )
         const best = recommended ?? fallback
@@ -214,21 +201,31 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
         ? Object.values(snap.services).filter((s) => s.metrics.failed).length
         : 0
 
+      if (g.__CG_DEBUG__) {
+        console.log(
+          `[dbg ${scenario.id}] firstFailure=${firstFailureAt} svc=${firstFailedService}` +
+            ` firstPred=${firstFailedService ? firstPredictionAt.get(firstFailedService) : 'n/a'}` +
+            ` lead=${lead} acc=${JSON.stringify(acc)} predOrigin=${predictedOrigin}` +
+            ` trueOrigin=${trueOrigin} impacted=${impacted.size} simTime=${snap?.simTime}`,
+        )
+      }
+
       resolveScenario({
         scenarioId: scenario.id,
         scenarioName: scenario.name,
         timeToFirstFailureMs: firstFailureAt ?? 0,
         predictionLeadTimeMs: lead,
+        predictedLeadTimeSec: lead === null ? null : Math.round(lead / 1000),
         predictedOrigin,
         trueOrigin,
         originMatch: predictedOrigin !== null && predictedOrigin === trueOrigin,
         servicesFailed,
         servicesImpacted: impacted.size,
-        hits,
-        missed,
-        falseAlarms,
-        precision: hits + falseAlarms > 0 ? hits / (hits + falseAlarms) : 0,
-        recall: hits + missed > 0 ? hits / (hits + missed) : 0,
+        hits: acc.hits,
+        missed: acc.missed,
+        falseAlarms: acc.falseAlarms,
+        precision: acc.precision,
+        recall: acc.recall,
         bestStrategyId,
         bestStrategySuccessProbability,
         incidentOpenedAtMs: incident?.startedAt ?? null,
@@ -268,32 +265,12 @@ function evaluateScenario(scenario: ScenarioDef): Promise<ScenarioEvaluation> {
       // 5) recovery projections (keep the most recent non-empty output)
       if (snap.projections.length > 0) lastProjections = snap.projections
 
-      const dbg = g.__CG_DEBUG__
-      if (dbg) {
-        console.log(`[dbg ${scenario.id} t=${snap.simTime}] tick=${snap.tick} inc=${snap.incidents.length} rc=${snap.rootCauses.length} acc=${JSON.stringify(snap.accuracy)}`)
-        const risks = Object.entries(snap.risks)
-          .map(([id, r]) => `${id}=${r.risk.toFixed(2)}${r.predicted ? '*' : ''}`)
-          .join(' ')
-        const failed = Object.values(snap.services)
-          .filter((s) => s.metrics.failed)
-          .map((s) => s.id)
-          .join(',')
-        const st = Object.values(snap.services)
-          .filter((s) => s.status !== 'healthy')
-          .map((s) => `${s.id}:${s.status}(sat=${s.metrics.saturation.toFixed(2)},mem=${s.metrics.memory.toFixed(2)},err=${s.metrics.errorRate.toFixed(2)})`)
-          .join(' ')
-        console.log(`[dbg t=${snap.simTime}] failed=${failed || '-'} | ${st || 'all healthy'}`)
-        console.log(`        risks ${risks}`)
-      }
-
       if (snap.simTime >= SIM_MS) finish()
     })
 
     // wall-clock guard — a stuck scenario must not stall the report
     timer = setTimeout(finish, SCENARIO_TIMEOUT_MS)
 
-    engine.loadScenario(scenario.id, EVAL_SEED)
-    engine.setSpeed(engineSpeed)
     engine.start()
   })
 }

@@ -42,7 +42,7 @@ function printTable(report: EvaluationReport): void {
   console.log('')
   console.log(
     pad('SCENARIO', 26) +
-      pad('LEAD', 8) +
+      pad('LEAD(s)', 9) +
       pad('ORIGIN', 26) +
       pad('MATCH', 7) +
       pad('PREC', 7) +
@@ -59,7 +59,7 @@ function printTable(report: EvaluationReport): void {
       s.predictedOrigin === null ? '(none)' : `${origin}${s.originMatch ? ' ✓' : ` (true: ${truth})`}`
     console.log(
       pad(s.scenarioId, 26) +
-        pad(fmtLead(s.predictionLeadTimeMs), 8) +
+        pad(fmtLead(s.predictionLeadTimeMs), 9) +
         pad(originCell, 26) +
         pad(s.originMatch ? 'YES' : 'no', 7) +
         pad(fmtPct(s.precision), 7) +

@@ -206,7 +206,7 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       case 'memory-leak': {
         const api = s.services.get('payments-api')
         if (api && t >= 30_000 && api.failedAt === null) {
-          api.memLeakRate = 0.011 // heap per step → OOM in ~3 sim-min
+          api.memLeakRate = 0.011 // heap per step → OOM in ~3.4 sim-min
           api.failureCause = api.failureCause ?? 'oom'
         }
         break
@@ -215,7 +215,8 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
         const gw = s.services.get(gatewayId ?? '')
         const redis = s.services.get('redis-cache')
         if (t >= 20_000 && t < 20_000 + 180_000) {
-          if (gw) gw.demandMult = 3
+          // the spike ramps in over 120s — a flash crowd does not appear at once
+          if (gw) gw.demandMult = 1 + 2 * clamp((t - 20_000) / 120_000, 0, 1)
           if (redis) redis.capacityMult = Math.min(redis.capacityMult, 0.45) // stampede evictions
         } else if (t >= 20_000 + 180_000) {
           if (gw) gw.demandMult = 1.05
@@ -225,8 +226,12 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       case 'retry-storm': {
         const pdb = s.services.get('payments-db')
         if (pdb && t >= 25_000 && t < 25_000 + 30_000) {
-          pdb.capacityMult = Math.min(pdb.capacityMult, 0.15) // hard blip
+          // the blip deepens over 20s, then heals — the retry storm outlives it
+          const ramp = clamp((t - 25_000) / 20_000, 0, 1)
+          pdb.capacityMult = 1 - 0.7 * ramp
           pdb.failureCause = pdb.failureCause ?? 'blip'
+        } else if (pdb && t >= 25_000 + 30_000) {
+          pdb.capacityMult = 1
         }
         break
       }
@@ -236,11 +241,15 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
   /** retry amplification factor for caller→callee edge at current sim time */
   function retryFactorFor(from: SimService, to: SimService): number {
     if (s.scenarioId === 'retry-storm' && from.node.id === 'payments-api' && to.node.id === 'payments-db') {
-      // 4× during blip and for 30s after (self-sustaining storm window)
-      if (s.simTime >= 25_000 && s.simTime <= 25_000 + 60_000) return 3.0
+      // the storm builds over 20s and outlives the blip by 30s
+      if (s.simTime >= 25_000 && s.simTime <= 25_000 + 60_000) {
+        return 3.0 * clamp((s.simTime - 25_000) / 20_000, 0.15, 1)
+      }
     }
     if (to.status === 'failed') return 2.5
-    if (to.metrics.errorRate > 0.3) return 2.0
+    // retries scale with the observed error rate — amplification ramps up
+    // instead of appearing as a step change
+    if (to.metrics.errorRate > 0.1) return 2.0 * Math.min(1, (to.metrics.errorRate - 0.1) / 0.4)
     return 0
   }
 
@@ -323,7 +332,9 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
     // queueing-style latency
     const baseLat = svc.node.kind === 'database' ? 9 : svc.node.kind === 'cache' ? 1.2 : svc.node.kind === 'queue' ? 4 : 18
     const p50 = baseLat * (1 / Math.max(0.08, 1 - Math.pow(clamp(util, 0, 0.97), 2.2)))
-    const errFromUtil = util > 0.7 ? Math.pow((util - 0.7) / 0.3, 1.8) : 0
+    // errors ramp with overload: a soft knee at 70% utilisation, saturation
+    // near 1.55x capacity. Hard failure needs *sustained* stress, not a spike.
+    const errFromUtil = util > 0.7 ? Math.min(0.98, Math.pow((util - 0.7) / 0.55, 1.6)) : 0
 
     // error contribution from failing critical dependencies
     let depError = 0
@@ -339,7 +350,14 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
 
     // memory & saturation dynamics
     const pileup = 0.4 * Math.max(0, util - 0.9) + svc.backlog / (svc.backlog + 400)
-    svc.memory = clamp(svc.memory + svc.memLeakRate + (pileup - (svc.memory - 0.3)) * 0.25, 0.05, 1.25)
+    if (svc.memLeakRate > 0) {
+      // a leak outpaces the GC: no steady state, the heap only grows
+      svc.memory = clamp(svc.memory + svc.memLeakRate + pileup * 0.2, 0.05, 1.25)
+    } else {
+      // no leak: GC keeps the heap near baseline even under heavy load
+      const loadPressure = Math.min(pileup, 0.02)
+      svc.memory = clamp(svc.memory + (loadPressure - (svc.memory - 0.3)) * 0.25, 0.05, 1.25)
+    }
     const targetSat = svc.node.kind === 'api' ? clamp(svc.backlog / 300, 0, 1.25) : clamp(util, 0, 1.25)
     svc.saturation = clamp(svc.saturation + (targetSat - svc.saturation) * 0.3 + svc.leakRate, 0.05, 1.3)
 
@@ -369,8 +387,10 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       else svc.satStreak = 0
       if (errorRate >= 0.92) svc.errStreak++
       else svc.errStreak = 0
-      const oom = svc.memory >= 1.05
-      if (oom || svc.satStreak >= 6 || svc.errStreak >= 2) {
+      const oom = svc.memory >= 1.05 && svc.memLeakRate > 0
+      // sustained stress only: 18s of saturation or 15s of error storm.
+      // OOM requires a genuine leak — overload alone must not fake it.
+      if (oom || svc.satStreak >= 6 || svc.errStreak >= 5) {
         failService(svc, oom ? 'oom' : svc.failureCause ?? 'error')
       }
     }

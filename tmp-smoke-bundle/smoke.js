@@ -5,7 +5,7 @@ var SIM = {
 	/** sim ms advanced per step */
 	SIM_MS_PER_STEP: 3e3,
 	/** prediction horizon, sim ms */
-	RISK_HORIZON_MS: 12e4,
+	RISK_HORIZON_MS: 3e5,
 	/** risk above this counts as an active prediction */
 	RISK_THRESHOLD: .55,
 	/** max log events kept */
@@ -418,7 +418,7 @@ function createEngine(topology, diagnostics) {
 				const gw = s.services.get(gatewayId ?? "");
 				const redis = s.services.get("redis-cache");
 				if (t >= 2e4 && t < 2e5) {
-					if (gw) gw.demandMult = 3;
+					if (gw) gw.demandMult = 1 + 2 * clamp((t - 2e4) / 75e3, 0, 1);
 					if (redis) redis.capacityMult = Math.min(redis.capacityMult, .45);
 				} else if (t >= 2e5) {
 					if (gw) gw.demandMult = 1.05;
@@ -428,9 +428,9 @@ function createEngine(topology, diagnostics) {
 			case "retry-storm": {
 				const pdb = s.services.get("payments-db");
 				if (pdb && t >= 25e3 && t < 55e3) {
-					pdb.capacityMult = Math.min(pdb.capacityMult, .15);
+					pdb.capacityMult = 1 - .7 * clamp((t - 25e3) / 2e4, 0, 1);
 					pdb.failureCause = pdb.failureCause ?? "blip";
-				}
+				} else if (pdb && t >= 55e3) pdb.capacityMult = 1;
 				break;
 			}
 		}
@@ -503,7 +503,7 @@ function createEngine(topology, diagnostics) {
 		const util = svc.demand / cap;
 		svc.processed = Math.min(svc.demand, cap);
 		const p50 = (svc.node.kind === "database" ? 9 : svc.node.kind === "cache" ? 1.2 : svc.node.kind === "queue" ? 4 : 18) * (1 / Math.max(.08, 1 - Math.pow(clamp(util, 0, .97), 2.2)));
-		const errFromUtil = util > .7 ? Math.pow((util - .7) / .3, 1.8) : 0;
+		const errFromUtil = util > .7 ? Math.min(.98, Math.pow((util - .7) / .55, 1.6)) : 0;
 		let depError = 0;
 		for (const e of calleesOf.get(svc.node.id) ?? []) {
 			if (cutEdges.has(`${svc.node.id}->${e.to}`)) continue;
@@ -515,7 +515,8 @@ function createEngine(topology, diagnostics) {
 		}
 		const errorRate = svc.failedAt !== null ? .95 : clamp(Math.max(errFromUtil, depError * .6), 0, .98);
 		const pileup = .4 * Math.max(0, util - .9) + svc.backlog / (svc.backlog + 400);
-		svc.memory = clamp(svc.memory + svc.memLeakRate + (pileup - (svc.memory - .3)) * .25, .05, 1.25);
+		if (svc.memLeakRate > 0) svc.memory = clamp(svc.memory + svc.memLeakRate + pileup * .2, .05, 1.25);
+		else svc.memory = clamp(svc.memory + (pileup - (svc.memory - .3)) * .25, .05, 1.25);
 		const targetSat = svc.node.kind === "api" ? clamp(svc.backlog / 300, 0, 1.25) : clamp(util, 0, 1.25);
 		svc.saturation = clamp(svc.saturation + (targetSat - svc.saturation) * .3 + svc.leakRate, .05, 1.3);
 		svc.metrics = {
@@ -539,7 +540,7 @@ function createEngine(topology, diagnostics) {
 			if (errorRate >= .92) svc.errStreak++;
 			else svc.errStreak = 0;
 			const oom = svc.memory >= 1.05;
-			if (oom || svc.satStreak >= 6 || svc.errStreak >= 2) failService(svc, oom ? "oom" : svc.failureCause ?? "error");
+			if (oom || svc.satStreak >= 6 || svc.errStreak >= 5) failService(svc, oom ? "oom" : svc.failureCause ?? "error");
 		}
 	}
 	function failService(svc, cause) {

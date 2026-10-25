@@ -1,8 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { actions, useSimulation } from './core/store'
 import { SCENARIOS } from './core/engine/scenarios'
+import { downloadIncidentReport } from './core/report'
 import type { ScenarioDef, ServiceId } from './core/types'
 import AccuracyPanel from './components/AccuracyPanel'
+import BenchmarksPanel from './components/BenchmarksPanel'
 import ImpactPanel from './components/ImpactPanel'
 import IncidentPanel from './components/IncidentPanel'
 import LogStream from './components/LogStream'
@@ -10,6 +12,7 @@ import PredictionLedger from './components/PredictionLedger'
 import RecoveryPanel from './components/RecoveryPanel'
 import RiskPanel from './components/RiskPanel'
 import RootCausePanel from './components/RootCausePanel'
+import ServiceDetail from './components/ServiceDetail'
 import Topology from './components/Topology'
 
 const SCENARIO_LIST: readonly ScenarioDef[] = Array.isArray(SCENARIOS) ? SCENARIOS : []
@@ -29,6 +32,29 @@ export default function App() {
   const handleSelect = useCallback((id: ServiceId) => {
     setSelected((prev) => (prev === id ? null : id))
   }, [])
+
+  // keyboard shortcuts: space = run/pause, 1/2/4 = speed, R = restart scenario,
+  // E = export incident report, Esc = close drawer
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (e.code === 'Space') {
+        e.preventDefault()
+        actions.toggleRun()
+      } else if (e.key === '1' || e.key === '2' || e.key === '4') {
+        actions.setSpeed(Number(e.key))
+      } else if (e.key.toLowerCase() === 'r') {
+        actions.loadScenario(snap.scenarioId)
+      } else if (e.key.toLowerCase() === 'e') {
+        downloadIncidentReport(snap)
+      } else if (e.key === 'Escape') {
+        setSelected(null)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [snap])
 
   const scenario = SCENARIO_LIST.find((s) => s.id === snap.scenarioId)
   const scenarioKnown = scenario !== undefined
@@ -154,6 +180,14 @@ export default function App() {
             >
               {snap.running ? '❚❚ PAUSE' : '▶ RUN'}
             </button>
+
+            <button
+              onClick={() => downloadIncidentReport(snap)}
+              title="Download the incident report as Markdown (E)"
+              className="h-8 rounded-md border border-edge bg-panel2 px-2.5 text-[11px] text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-100"
+            >
+              ⤓ REPORT
+            </button>
           </div>
         </div>
       </header>
@@ -188,8 +222,18 @@ export default function App() {
             appliedStrategies={snap.appliedStrategies}
             services={snap.services}
           />
+          <BenchmarksPanel />
         </aside>
       </main>
+
+      {selected && (
+        <ServiceDetail
+          snap={snap}
+          serviceId={selected}
+          onClose={() => setSelected(null)}
+          onApplyStrategy={(id) => actions.applyStrategy(id)}
+        />
+      )}
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       <footer className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-edge bg-panel/60 px-3 py-1.5 text-[10px] text-slate-500">
@@ -197,6 +241,8 @@ export default function App() {
           <span className="font-semibold tracking-wider text-slate-600">HOW IT WORKS</span>
           <span className="mx-1.5 text-slate-700">·</span>
           Simulated cluster → telemetry → AI prediction → verified against ground truth
+          <span className="mx-1.5 text-slate-700">·</span>
+          <span className="font-mono">SPACE run/pause · 1/2/4 speed · E export report</span>
         </span>
         <span className="font-mono">Orcathon 2026 · CascadeGuard</span>
       </footer>

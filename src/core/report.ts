@@ -1,0 +1,127 @@
+// ============================================================
+// CascadeGuard — Incident Report Generator
+// Turns the live simulation state into a shareable Markdown
+// incident report: what was predicted, what actually broke, the
+// root-cause chain and the recommended recovery plan.
+// ============================================================
+
+import type { SimulationSnapshot } from './types'
+
+function fmtT(ms: number): string {
+  const t = Math.max(0, Math.floor(ms / 1000))
+  return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`
+}
+
+export function buildIncidentReport(snap: SimulationSnapshot): string {
+  const lines: string[] = []
+  const confirmed = snap.ledger.filter((e) => e.outcome === 'confirmed')
+  const bestLead = confirmed.reduce((a, e) => Math.max(a, e.leadTimeMs ?? 0), 0)
+
+  lines.push('# CascadeGuard — Incident Report')
+  lines.push('')
+  lines.push(`- **Scenario:** ${snap.scenarioId}`)
+  lines.push(`- **Generated at:** T+${fmtT(snap.simTime)} (simulated clock)`)
+  lines.push(`- **Cluster verdict:** ${snap.impact.severity.toUpperCase()}`)
+  lines.push(
+    `- **Business impact:** ${(snap.impact.userImpactPct * 100).toFixed(0)}% of user flow degraded · SLO burn ${snap.impact.sloBurnRate}× · $${(snap.impact.revenueAtRiskPerMin / 1000).toFixed(1)}k/min at risk`,
+  )
+  lines.push(
+    `- **Model accuracy:** precision ${(snap.accuracy.precision * 100).toFixed(0)}% · recall ${(snap.accuracy.recall * 100).toFixed(0)}% · avg lead time ${Math.round(snap.accuracy.avgLeadTimeMs / 1000)}s · ${snap.accuracy.hits} hit / ${snap.accuracy.missed} missed / ${snap.accuracy.falseAlarms} false alarm(s)`,
+  )
+  lines.push('')
+
+  lines.push('## 1. Prediction ledger (warnings vs. reality)')
+  lines.push('')
+  if (snap.ledger.length === 0) {
+    lines.push('_No predictions were raised._')
+  } else {
+    lines.push('| Time | Service | Risk | Outcome | Lead time |')
+    lines.push('| --- | --- | --- | --- | --- |')
+    for (const e of snap.ledger.slice(-20)) {
+      const outcome =
+        e.outcome === 'confirmed'
+          ? `✅ confirmed failure${e.leadTimeMs ? ` (${Math.round(e.leadTimeMs / 1000)}s early)` : ''}`
+          : e.outcome === 'false-alarm'
+            ? 'no failure (false alarm)'
+            : 'pending'
+      lines.push(
+        `| T+${fmtT(e.madeAt)} | ${e.service} | ${(e.risk * 100).toFixed(0)}% | ${outcome} | ${e.leadTimeMs ? `${Math.round(e.leadTimeMs / 1000)}s` : '—'} |`,
+      )
+    }
+    lines.push('')
+    lines.push(
+      `**Best warning lead time: ${Math.round(bestLead / 1000)}s before the service actually died.**`,
+    )
+  }
+  lines.push('')
+
+  lines.push('## 2. Incidents')
+  lines.push('')
+  if (snap.incidents.length === 0) {
+    lines.push('_No incidents opened._')
+  } else {
+    for (const i of snap.incidents) {
+      lines.push(`- **${i.severity}** — ${i.title}`)
+      lines.push(
+        `  - origin: \`${i.origin ?? 'unknown'}\` · started T+${fmtT(i.startedAt)} · services: ${i.services.join(', ') || '—'}`,
+      )
+    }
+  }
+  lines.push('')
+
+  lines.push('## 3. Root-cause analysis')
+  lines.push('')
+  if (snap.rootCauses.length === 0) {
+    lines.push('_No root-cause hypotheses yet._')
+  } else {
+    for (const h of snap.rootCauses.slice(0, 5)) {
+      lines.push(`- **${h.service}** — confidence ${(h.confidence * 100).toFixed(0)}%`)
+      if (h.chain && h.chain.length > 0) lines.push(`  - cascade path: ${h.chain.join(' → ')}`)
+      if (h.evidence && h.evidence.length > 0) lines.push(`  - evidence: ${h.evidence.join('; ')}`)
+    }
+  }
+  lines.push('')
+
+  lines.push('## 4. Recovery strategies (Monte-Carlo ranked)')
+  lines.push('')
+  if (snap.projections.length === 0) {
+    lines.push('_No strategies projected (no active incident)._')
+  } else {
+    lines.push('| Strategy | Success probability | Expected cascade | Expected damage | MTTR | Cost | Verdict |')
+    lines.push('| --- | --- | --- | --- | --- | --- | --- |')
+    for (const p of snap.projections.slice(0, 8)) {
+      lines.push(
+        `| ${p.strategyId} | ${(p.successProbability * 100).toFixed(0)}% | ${p.expectedCascadeSize.toFixed(1)} svc | ${p.expectedDamage.toFixed(1)} | ${Math.round(p.mttrMs / 1000)}s | ${p.cost} | ${p.verdict} |`,
+      )
+    }
+  }
+  lines.push('')
+
+  lines.push('## 5. Service telemetry at report time')
+  lines.push('')
+  lines.push('| Service | Status | rps | p99 | err | cpu | mem | saturation |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  for (const s of Object.values(snap.services)) {
+    lines.push(
+      `| ${s.name} | ${s.status} | ${s.metrics.rps} | ${s.metrics.latencyP99}ms | ${(s.metrics.errorRate * 100).toFixed(0)}% | ${(s.metrics.cpu * 100).toFixed(0)}% | ${(s.metrics.memory * 100).toFixed(0)}% | ${(s.metrics.saturation * 100).toFixed(0)}% |`,
+    )
+  }
+  lines.push('')
+  lines.push('---')
+  lines.push('_Generated by CascadeGuard — AI-driven cascading-failure prediction, root-cause analysis and recovery optimisation._')
+  return lines.join('\n')
+}
+
+/** Build the report and hand it to the browser as a .md download. */
+export function downloadIncidentReport(snap: SimulationSnapshot): void {
+  const md = buildIncidentReport(snap)
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `cascadeguard-${snap.scenarioId}-${Math.round(snap.simTime / 1000)}.md`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

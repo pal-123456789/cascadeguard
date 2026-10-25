@@ -323,7 +323,7 @@ export const SIM = {
   /** sim ms advanced per step */
   SIM_MS_PER_STEP: 3000,
   /** prediction horizon, sim ms */
-  RISK_HORIZON_MS: 120_000,
+  RISK_HORIZON_MS: 300_000,
   /** risk above this counts as an active prediction */
   RISK_THRESHOLD: 0.55,
   /** max log events kept */
