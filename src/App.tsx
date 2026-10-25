@@ -3,8 +3,10 @@ import { actions, useSimulation } from './core/store'
 import { SCENARIOS } from './core/engine/scenarios'
 import type { ScenarioDef, ServiceId } from './core/types'
 import AccuracyPanel from './components/AccuracyPanel'
+import ImpactPanel from './components/ImpactPanel'
 import IncidentPanel from './components/IncidentPanel'
 import LogStream from './components/LogStream'
+import PredictionLedger from './components/PredictionLedger'
 import RecoveryPanel from './components/RecoveryPanel'
 import RiskPanel from './components/RiskPanel'
 import RootCausePanel from './components/RootCausePanel'
@@ -31,6 +33,23 @@ export default function App() {
   const scenario = SCENARIO_LIST.find((s) => s.id === snap.scenarioId)
   const scenarioKnown = scenario !== undefined
 
+  // live cluster verdict for the header
+  const failedCount = Object.values(snap.services).filter((s) => s.status === 'failed').length
+  const predictedCount = Object.values(snap.risks).filter((r) => r.predicted).length
+  const activeIncident = snap.incidents.find((i) => i.resolvedAt === undefined)
+  const verdictTone =
+    failedCount > 0
+      ? 'border-red-500/40 bg-red-500/10 text-red-300'
+      : predictedCount > 0
+        ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
+        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+  const verdictText =
+    failedCount > 0
+      ? `${failedCount} DOWN${predictedCount ? ` · ${predictedCount} PREDICTED` : ''}`
+      : predictedCount > 0
+        ? `${predictedCount} FAILURE${predictedCount > 1 ? 'S' : ''} PREDICTED`
+        : 'ALL SYSTEMS NOMINAL'
+
   return (
     <div className="flex min-h-screen flex-col bg-void">
       {/* ── Header ─────────────────────────────────────────────── */}
@@ -49,6 +68,19 @@ export default function App() {
           </div>
 
           <div className="hidden h-8 w-px bg-edge sm:block" />
+
+          <div
+            className={`hidden items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[10px] font-semibold tracking-wider md:inline-flex ${verdictTone}`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {verdictText}
+          </div>
+
+          {activeIncident && (
+            <span className="hidden rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wider text-red-300 lg:inline">
+              {activeIncident.severity}
+            </span>
+          )}
 
           <div className="flex items-center gap-2">
             <span
@@ -140,6 +172,7 @@ export default function App() {
 
         <aside className="flex flex-col gap-3 lg:sticky lg:top-[57px] lg:max-h-[calc(100vh-65px)] lg:overflow-y-auto lg:pr-0.5">
           <IncidentPanel incidents={snap.incidents} alerts={snap.alerts} simTime={snap.simTime} />
+          <ImpactPanel impact={snap.impact} services={snap.services} />
           <AccuracyPanel accuracy={snap.accuracy} />
           <RiskPanel
             risks={snap.risks}
@@ -148,6 +181,7 @@ export default function App() {
             tick={snap.tick}
             scenarioId={snap.scenarioId}
           />
+          <PredictionLedger ledger={snap.ledger} services={snap.services} />
           <RootCausePanel hypotheses={snap.rootCauses} services={snap.services} />
           <RecoveryPanel
             projections={snap.projections}

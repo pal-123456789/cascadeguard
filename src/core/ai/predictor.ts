@@ -20,16 +20,16 @@ import type {
 // ---- documented model weights -------------------------------------
 // z = BIAS + Σ wᵢ·fᵢ ; risk = sigmoid(z). Calibration targets:
 // healthy → 0.05-0.15, slow creep → 0.4-0.7, imminent → ≥0.75.
-const BIAS = -3.6
-const W_MEM = 1.0 // memory level (0..1)
-const W_SAT = 1.3 // pool/queue saturation level (0..1)
-const W_ERR = 1.4 // error rate (scaled ×5, saturates at 0.2)
-const W_CPU = 0.7 // cpu level (0..1)
-const W_LAT = 0.6 // p99 latency / 2000ms
-const W_SLOPE_MEM = 1.8 // memory fast−slow EWMA trend ×60k (per sim-ms)
-const W_SLOPE_SAT = 1.8 // saturation trend ×60k (per sim-ms)
+const BIAS = -3.7
+const W_MEM = 2.0 // memory level (0..1)
+const W_SAT = 2.4 // pool/queue saturation level (0..1)
+const W_ERR = 0.8 // error rate (scaled ×5, saturates at 0.2)
+const W_CPU = 0.5 // cpu level (0..1)
+const W_LAT = 0.45 // p99 latency / 2000ms
+const W_SLOPE_MEM = 8.0 // memory trend, units-per-minute (×60k)
+const W_SLOPE_SAT = 10.0 // saturation trend, units-per-minute (×60k) — the leading indicator
 const W_SLOPE_ERR = 1.4 // error-rate trend ×120k (per sim-ms)
-const W_LOG = 1.1 // WARN/ERROR log intensity, last 30s (/8 events)
+const W_LOG = 0.9 // WARN/ERROR log intensity, last 30s (/8 events)
 const EWMA_A_FAST = 0.35 // fast EWMA smoothing (reacts quickly)
 const EWMA_A_SLOW = 0.8 // slow EWMA smoothing (stable trend)
 const SLOPE_MEM_SCALE = 60_000 // per-ms trend → 0..1 feature
@@ -38,12 +38,31 @@ const LOG_WINDOW_MS = 30_000
 const LOG_BURST_COUNT = 8 // warn/error events in 30s → intensity 1
 const LAT_SCALE_MS = 2000 // p99 latency mapped to 0..1
 const ERR_SCALE = 5
-const HISTORY_SAMPLES = 20
+const HISTORY_SAMPLES = 40
+const TREND_WINDOW_MS = 120_000 // trend is measured over a fixed 2 sim-minute window
 const PROP_ITERATIONS = 2
-const PROP_GAIN = 0.5 // × edge weight per hop
+const PROP_GAIN = 0.3 // × edge weight per hop
 const LOCAL_MIX = 0.75 // final = 0.75·local + 0.25·propagated
 const SMOOTH_OWN = 0.65 // smoothed = 0.65·own + 0.35·previous
 const TTF_FLOOR_MS = 1_000
+
+/**
+ * Hard-failure propensity by service class. A saturated connection pool
+ * or a leaking heap takes a datastore down; an API service usually
+ * degrades (serving errors) rather than dying. Scaling the score by
+ * class keeps the model from crying wolf on downstream victims while
+ * still flagging the true origin of a cascade.
+ */
+const KIND_FACTOR: Record<string, number> = {
+  database: 1.2,
+  queue: 1.15,
+  cache: 1.0,
+  gateway: 0.95,
+  api: 0.8,
+  worker: 0.8,
+  storage: 1.0,
+  external: 0.9,
+}
 
 // ---- local pure math helpers --------------------------------------
 
@@ -87,7 +106,10 @@ function extractFeatures(
   input: DiagnosticsInput,
   id: ServiceId,
 ): FeatureSet {
-  const win = history.slice(-HISTORY_SAMPLES)
+  // A fixed *time* window (not a fixed sample count) keeps the trend
+  // feature invariant to playback speed: the engine publishes telemetry
+  // every simulation step, so 2 sim-minutes is always 40 samples.
+  const win = history.filter((m) => m.ts >= input.simTime - TREND_WINDOW_MS).slice(-HISTORY_SAMPLES)
   const samples = win.length > 0 ? win : [cur]
   const n = samples.length
   let mem = 0
@@ -216,7 +238,7 @@ export function predictRisks(
     const prevRisk = prev[id]?.risk
     const own =
       prevRisk === undefined ? blended : SMOOTH_OWN * blended + (1 - SMOOTH_OWN) * prevRisk
-    const risk = Math.min(0.99, Math.max(0.01, own))
+    const risk = Math.min(0.99, Math.max(0.01, own * (KIND_FACTOR[state.kind] ?? 1)))
 
     // TTF: extrapolate the faster-rising of memory/saturation to the 1.0 crossing.
     const crossings: number[] = []

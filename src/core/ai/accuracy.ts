@@ -1,21 +1,28 @@
 // ============================================================
 // CascadeGuard — Live Accuracy Tracker (AI module)
-// Matches active risk predictions against observed failures.
-// This is the ONLY AI module allowed to read `ServiceMetrics.failed`
-// (simulation ground truth) — see ../types.ts.
+// Scores every prediction the AI raises against the simulation's
+// ground truth (the ONLY module allowed to read `metrics.failed`).
+//
+// Semantics, per service:
+//   • predictedAt   = first tick where risk crossed the threshold
+//                     while the service was still healthy
+//   • hit           = the service actually failed within the
+//                     prediction horizon → lead time = warning value
+//   • false-alarm   = horizon elapsed, no failure happened
+//   • missed        = the service failed with no prior prediction
 // ============================================================
 
 import { SIM } from '../types'
 import type { AccuracyStats, DiagnosticsInput, RiskAssessment, ServiceId } from '../types'
 
-interface PendingPrediction {
-  madeAt: number
-  active: boolean
+interface Tracker {
+  predictedAt?: number
+  resolved?: 'hit' | 'false-alarm' | 'missed'
+  leadMs?: number
 }
 
-// Module-level tracker state (persists across ticks for the engine lifetime).
-const pending = new Map<ServiceId, PendingPrediction>()
-const failedSeen = new Set<ServiceId>()
+// Module-level state — persists for the lifetime of the engine.
+const trackers = new Map<ServiceId, Tracker>()
 const leadTimes: number[] = []
 let hits = 0
 let falseAlarms = 0
@@ -25,54 +32,45 @@ export function trackAccuracy(
   input: DiagnosticsInput,
   risks: Record<ServiceId, RiskAssessment>,
 ): AccuracyStats {
-  // 1) Expire stale predictions: no failure within the horizon → false alarm.
-  for (const [id, p] of pending) {
-    if (input.simTime - p.madeAt > SIM.RISK_HORIZON_MS) {
-      pending.delete(id)
-      falseAlarms++
-    }
-  }
-
-  // 2) Detect failure rising edges (ground truth read — permitted here only).
-  for (const id of Object.keys(input.services)) {
-    const st = input.services[id]
-    if (!st) continue
-    const failedNow = st.metrics.failed
-    if (failedNow && !failedSeen.has(id)) {
-      const p = pending.get(id)
-      if (p) {
-        const lead = input.simTime - p.madeAt
-        pending.delete(id)
-        if (lead <= SIM.RISK_HORIZON_MS) {
-          hits++
-          leadTimes.push(lead)
-        } else {
-          missed++
-        }
-      } else {
-        missed++ // failure nobody predicted
-      }
-      failedSeen.add(id)
-    } else if (!failedNow) {
-      failedSeen.delete(id) // re-arm for the next incident
-    }
-  }
-
-  // 3) Register new predictions (never for services that already failed —
-  //    a "prediction" of the past is not a prediction).
-  for (const id of Object.keys(risks)) {
+  for (const [id, st] of Object.entries(input.services)) {
+    const t = trackers.get(id) ?? {}
+    const failed = st.metrics.failed
     const r = risks[id]
-    const st = input.services[id]
-    if (!st || st.metrics.failed) continue
-    if (r && r.predicted && !pending.has(id)) {
-      pending.set(id, { madeAt: input.simTime, active: true })
+
+    // A warning is only meaningful while the service is still alive.
+    if (!failed && r?.predicted && t.predictedAt === undefined) {
+      t.predictedAt = input.simTime
     }
+
+    if (failed && t.resolved === undefined) {
+      if (t.predictedAt !== undefined && input.simTime - t.predictedAt <= SIM.RISK_HORIZON_MS) {
+        t.resolved = 'hit'
+        t.leadMs = input.simTime - t.predictedAt
+        hits++
+        leadTimes.push(t.leadMs)
+      } else {
+        t.resolved = 'missed'
+        missed++
+      }
+    } else if (!failed && t.resolved === undefined && t.predictedAt !== undefined) {
+      if (input.simTime - t.predictedAt > SIM.RISK_HORIZON_MS) {
+        t.resolved = 'false-alarm'
+        falseAlarms++
+      }
+    }
+
+    // Re-arm a service that recovered: the next incident is scored fresh.
+    if (!failed && (t.resolved === 'missed' || t.resolved === 'false-alarm')) {
+      trackers.delete(id)
+      continue
+    }
+
+    trackers.set(id, t)
   }
 
-  const predictions = hits + falseAlarms + missed
   const sum = leadTimes.reduce((s, v) => s + v, 0)
   return {
-    predictions,
+    predictions: hits + falseAlarms + missed,
     hits,
     falseAlarms,
     missed,
@@ -80,4 +78,13 @@ export function trackAccuracy(
     precision: hits + falseAlarms > 0 ? hits / (hits + falseAlarms) : 0,
     recall: hits + missed > 0 ? hits / (hits + missed) : 0,
   }
+}
+
+/** Test seam: reset tracker state between evaluation runs. */
+export function resetAccuracyTracker(): void {
+  trackers.clear()
+  leadTimes.length = 0
+  hits = 0
+  falseAlarms = 0
+  missed = 0
 }

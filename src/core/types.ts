@@ -213,6 +213,36 @@ export interface ScenarioDef {
   faultStartMs: number
 }
 
+// ---------------- Prediction Ledger (proof of prediction) ----------------
+
+export interface PredictionLedgerEntry {
+  id: string
+  service: ServiceId
+  /** sim-ms when the prediction was raised */
+  madeAt: number
+  risk: number
+  ttfMs?: number
+  outcome: 'confirmed' | 'false-alarm' | 'pending'
+  /** sim-ms of the actual failure (when confirmed) */
+  failedAt?: number
+  /** warning time before the real failure */
+  leadTimeMs?: number
+}
+
+// ---------------- Business impact / SLO ----------------
+
+export interface SloImpact {
+  /** 0..1 share of critical business flow currently degraded */
+  userImpactPct: number
+  /** error-budget burn multiplier (1 = normal) */
+  sloBurnRate: number
+  /** estimated $ at risk per minute */
+  revenueAtRiskPerMin: number
+  /** services currently degraded or failed */
+  affectedServices: number
+  severity: 'nominal' | 'elevated' | 'critical'
+}
+
 // ---------------- Simulation Snapshot (UI contract) ----------------
 
 export interface SimulationSnapshot {
@@ -231,6 +261,10 @@ export interface SimulationSnapshot {
   appliedStrategies: AppliedStrategy[]
   accuracy: AccuracyStats
   alerts: Alert[]
+  /** chronological proof of every prediction raised */
+  ledger: PredictionLedgerEntry[]
+  /** live business-impact snapshot */
+  impact: SloImpact
 }
 
 // ---------------- Engine & Diagnostics contracts ----------------
@@ -291,7 +325,7 @@ export const SIM = {
   /** prediction horizon, sim ms */
   RISK_HORIZON_MS: 120_000,
   /** risk above this counts as an active prediction */
-  RISK_THRESHOLD: 0.52,
+  RISK_THRESHOLD: 0.55,
   /** max log events kept */
   LOG_WINDOW: 500,
   /** metrics samples per service kept */

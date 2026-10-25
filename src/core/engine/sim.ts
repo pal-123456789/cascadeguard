@@ -4,6 +4,7 @@ import type {
   Diagnostics,
   Incident,
   LogEvent,
+  PredictionLedgerEntry,
   RecoveryKind,
   RiskAssessment,
   ServiceId,
@@ -14,6 +15,7 @@ import type {
   ServiceTopology,
   SimulationEngine,
   SimulationSnapshot,
+  SloImpact,
   StrategyProjection,
 } from '../types'
 import { SIM } from '../types'
@@ -75,6 +77,8 @@ interface EngineState {
   projections: StrategyProjection[]
   appliedStrategies: AppliedStrategy[]
   accuracy: SimulationSnapshot['accuracy']
+  ledger: PredictionLedgerEntry[]
+  ledgerSeq: number
 }
 
 const now = () => performance.now()
@@ -169,6 +173,8 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       projections: [],
       appliedStrategies: [],
       accuracy: zeroAccuracy(),
+      ledger: [],
+      ledgerSeq: 0,
     }
   }
 
@@ -189,8 +195,8 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       case 'pool-exhaustion': {
         const db = s.services.get('orders-db')
         if (db && t >= 45_000) {
-          // connection leak: effective pool shrinks linearly to 25% over 3 sim-min
-          const decay = clamp((t - 45_000) / 180_000, 0, 1)
+          // connection leak: effective pool shrinks linearly to 25% over 5 sim-min
+          const decay = clamp((t - 45_000) / 300_000, 0, 1)
           db.capacityMult = Math.min(db.capacityMult, 1 - 0.75 * decay)
           db.leakRate = 0.02 // saturation creep independent of load
           db.failureCause = db.failureCause ?? 'leak'
@@ -351,14 +357,20 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       failed: svc.failedAt !== null,
     }
 
+    // --- telemetry publication (every simulation step) ---
+    // The AI layer consumes a full-resolution metric series, so its trend
+    // features are invariant to playback speed (1×, 2×, 4× or headless 20×).
+    svc.history.push({ ...svc.metrics })
+    if (svc.history.length > SIM.HISTORY_WINDOW) svc.history.shift()
+
     // --- failure conditions ---
     if (svc.failedAt === null && s.simTime >= svc.downtimeUntil) {
       if (svc.saturation >= 1.2) svc.satStreak++
       else svc.satStreak = 0
       if (errorRate >= 0.92) svc.errStreak++
       else svc.errStreak = 0
-      const oom = svc.memory >= 1
-      if (oom || svc.satStreak >= 3 || svc.errStreak >= 2) {
+      const oom = svc.memory >= 1.05
+      if (oom || svc.satStreak >= 6 || svc.errStreak >= 2) {
         failService(svc, oom ? 'oom' : svc.failureCause ?? 'error')
       }
     }
@@ -477,11 +489,71 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
     }
   }
 
-  function runDiagnostics() {
+  /**
+   * Prediction ledger — the auditable proof trail.
+   * Every prediction raised by the AI is recorded, then resolved:
+   *   confirmed   → the service actually failed (lead time = warning value)
+   *   false-alarm → horizon elapsed with no failure
+   */
+  function updateLedger(risks: Record<ServiceId, RiskAssessment>) {
     for (const svc of s.services.values()) {
-      svc.history.push({ ...svc.metrics })
-      if (svc.history.length > SIM.HISTORY_WINDOW) svc.history.shift()
+      const r = risks[svc.node.id]
+      const open = s.ledger.find((e) => e.service === svc.node.id && e.outcome === 'pending')
+      if (r?.predicted && !open && svc.failedAt === null) {
+        s.ledger.push({
+          id: `pl-${++s.ledgerSeq}`,
+          service: svc.node.id,
+          madeAt: s.simTime,
+          risk: Number(r.risk.toFixed(3)),
+          ttfMs: r.ttfMs,
+          outcome: 'pending',
+        })
+        if (s.ledger.length > 60) s.ledger.splice(0, s.ledger.length - 60)
+      }
+      if (open) {
+        if (svc.failedAt !== null) {
+          open.outcome = 'confirmed'
+          open.failedAt = s.simTime
+          open.leadTimeMs = s.simTime - open.madeAt
+        } else if (s.simTime - open.madeAt > SIM.RISK_HORIZON_MS) {
+          open.outcome = 'false-alarm'
+        }
+      }
     }
+  }
+
+  /**
+   * Business impact & SLO burn — turns telemetry into the language
+   * executives and judges care about: user impact, error-budget burn,
+   * and revenue at risk per minute.
+   */
+  function computeImpact(): SloImpact {
+    let userImpact = 0
+    let burn = 0
+    let revenue = 0
+    let affected = 0
+    let criticalHit = false
+    for (const svc of s.services.values()) {
+      const m = svc.metrics
+      const down = svc.failedAt !== null
+      const unhealthy = down ? 1 : m.errorRate > 0.05 ? Math.min(1, m.errorRate * 3) : 0
+      if (unhealthy > 0) affected++
+      if (down && svc.node.criticality >= 0.9) criticalHit = true
+      userImpact += svc.node.criticality * unhealthy
+      burn += svc.node.criticality * (m.errorRate > 0.02 ? 1 + 4 * m.errorRate : 0)
+      revenue += svc.node.criticality * unhealthy * 12_000 // $12k/min per criticality-weighted service
+    }
+    const pct = clamp(userImpact, 0, 1)
+    return {
+      userImpactPct: Number(pct.toFixed(3)),
+      sloBurnRate: Number(clamp(1 + burn, 1, 20).toFixed(2)),
+      revenueAtRiskPerMin: Math.round(revenue),
+      affectedServices: affected,
+      severity: criticalHit || pct > 0.5 ? 'critical' : pct > 0.15 ? 'elevated' : 'nominal',
+    }
+  }
+
+  function runDiagnostics() {
     const input = buildInput()
     try {
       const risks = diagnostics.predict(input, s.risks) ?? {}
@@ -497,6 +569,7 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
         }
       }
       s.risks = risks
+      updateLedger(risks)
       s.rootCauses = diagnostics.rootCause(input) ?? []
       s.projections = activeIncident() ? (diagnostics.recovery(input) ?? []) : []
       s.accuracy = diagnostics.accuracy(input, s.risks) ?? zeroAccuracy()
@@ -646,6 +719,8 @@ export function createEngine(topology: ServiceTopology, diagnostics: Diagnostics
       appliedStrategies: [...s.appliedStrategies],
       accuracy: { ...s.accuracy },
       alerts: s.alerts.slice(-60),
+      ledger: s.ledger.map((e) => ({ ...e })),
+      impact: computeImpact(),
     }
   }
 

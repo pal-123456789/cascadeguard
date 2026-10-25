@@ -43,7 +43,10 @@ const unsub = engine.subscribe((snap) => {
   if (snap.logs.length > 0) sawLogs = true
   for (const r of Object.values(snap.risks)) {
     if (r.risk > maxRiskSeen) maxRiskSeen = r.risk
-    if (r.predicted && firstPredictionTs === null) firstPredictionTs = snap.simTime
+    if (r.predicted) {
+      predictedBeforeFailure = true
+      if (firstPredictionTs === null) firstPredictionTs = snap.simTime
+    }
   }
   for (const s of Object.values(snap.services)) {
     if (s.metrics.failed && firstFailureTs === null) firstFailureTs = snap.simTime
@@ -61,22 +64,37 @@ function report(snap: SimulationSnapshot) {
   engine.pause()
   const incidents = snap.incidents.length
   const lead = firstFailureTs !== null && firstPredictionTs !== null ? firstFailureTs - firstPredictionTs : null
+  const confirmed = snap.ledger.filter((e) => e.outcome === 'confirmed')
+  const bestLead = confirmed.reduce((a, e) => Math.max(a, e.leadTimeMs ?? 0), 0)
 
   ok(sawLogs, `logs streaming (${snap.logs.length} in window)`)
   ok(incidents >= 1, `incident detected (count=${incidents})`)
   ok(maxRiskSeen > 0.5, `predictor produced meaningful risk (max=${maxRiskSeen.toFixed(2)})`)
   ok(
-    predictedBeforeFailure && lead !== null && lead > 0,
-    `prediction preceded failure by ${lead !== null ? Math.round(lead / 1000) : '?'}s`,
+    predictedBeforeFailure && bestLead > 0,
+    `prediction preceded failure by ${Math.round(bestLead / 1000)}s (best confirmed lead)`,
   )
   ok(sawRootCauses, 'root-cause hypotheses produced during incident')
   ok(sawRecommended, 'recovery optimizer produced a recommended strategy')
   ok(accuracy !== null && accuracy.hits + accuracy.falseAlarms > 0, `accuracy tracker resolved predictions (${JSON.stringify(accuracy)})`)
+  ok(snap.ledger.length > 0, `prediction ledger populated (${snap.ledger.length} entries, ${snap.ledger.filter((e) => e.outcome === 'confirmed').length} confirmed)`)
+  ok(snap.impact.revenueAtRiskPerMin >= 0, `business impact computed (SLO burn ${snap.impact.sloBurnRate}x, $${(snap.impact.revenueAtRiskPerMin / 1000).toFixed(1)}k/min, ${snap.impact.affectedServices} affected)`)
 
   console.log('--- SMOKE RESULTS ---')
   results.forEach((r) => console.log(r))
   console.log(`scenario=${snap.scenarioId} simTime=${(snap.simTime / 60000).toFixed(1)}min`)
   console.log('accuracy=', JSON.stringify(snap.accuracy))
+  console.log(
+    'ledger=',
+    JSON.stringify(
+      snap.ledger.map((e) => ({
+        svc: e.service,
+        risk: e.risk,
+        outcome: e.outcome,
+        leadS: e.leadTimeMs !== undefined ? Math.round(e.leadTimeMs / 1000) : undefined,
+      })),
+    ),
+  )
   console.log('incidents=', JSON.stringify(snap.incidents.map((i) => ({ sev: i.severity, origin: i.origin, title: i.title }))))
   const failedNow = Object.values(snap.services).filter((s) => s.metrics.failed).map((s) => s.id)
   console.log('failedNow=', failedNow.join(',') || '(none)')

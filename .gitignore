@@ -12,6 +12,14 @@ build/
 out/
 *.egg-info/
 
+# local build/verification scratch dirs
+tmp-*/
+smoke.mjs
+
+# stray compiled output next to sources (never commit)
+src/**/*.js
+scripts/**/*.js
+
 # env & secrets
 .env
 .env.*
