@@ -244,6 +244,27 @@ export default function App() {
           <span className="mx-1.5 text-slate-700">·</span>
           <span className="font-mono">SPACE run/pause · 1/2/4 speed · E export report</span>
         </span>
+        <span className="flex items-center gap-3">
+          <a href="/portfolio.html" className="transition-colors hover:text-slate-300">
+            Case study
+          </a>
+          <a
+            href="https://github.com/pal-123456789/cascadeguard/blob/main/docs/JUDGE_GUIDE.md"
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-slate-300"
+          >
+            Judge guide
+          </a>
+          <a
+            href="https://github.com/pal-123456789/cascadeguard"
+            target="_blank"
+            rel="noreferrer"
+            className="transition-colors hover:text-slate-300"
+          >
+            Source
+          </a>
+        </span>
         <span className="font-mono">Orcathon 2026 · CascadeGuard</span>
       </footer>
     </div>

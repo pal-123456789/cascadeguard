@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="CascadeGuard — see the outage before it happens">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b0f17" />
+      <stop offset="55%" stop-color="#101827" />
+      <stop offset="100%" stop-color="#0d1420" />
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#a78bfa" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect width="1200" height="630" fill="url(#glow)" />
+
+  <!-- topology motif -->
+  <g stroke="#1e293b" stroke-width="2" opacity="0.9">
+    <line x1="250" y1="200" x2="420" y2="140" />
+    <line x1="250" y1="200" x2="420" y2="300" />
+    <line x1="420" y1="140" x2="600" y2="180" />
+    <line x1="420" y1="300" x2="600" y2="180" />
+    <line x1="600" y1="180" x2="790" y2="120" />
+    <line x1="600" y1="180" x2="790" y2="250" />
+  </g>
+  <g>
+    <circle cx="250" cy="200" r="13" fill="#34d399" opacity="0.9" />
+    <circle cx="420" cy="140" r="13" fill="#34d399" opacity="0.9" />
+    <circle cx="420" cy="300" r="13" fill="#34d399" opacity="0.9" />
+    <circle cx="600" cy="180" r="18" fill="none" stroke="url(#ring)" stroke-width="4" />
+    <circle cx="600" cy="180" r="10" fill="#a78bfa" />
+    <circle cx="790" cy="120" r="13" fill="#f59e0b" opacity="0.9" />
+    <circle cx="790" cy="250" r="13" fill="#34d399" opacity="0.9" />
+  </g>
+
+  <g font-family="Inter, Segoe UI, system-ui, sans-serif">
+    <text x="80" y="300" font-size="64" font-weight="800" fill="#f1f5f9">
+      CascadeGuard
+    </text>
+    <text x="80" y="352" font-size="30" font-weight="600" fill="#38bdf8">
+      See the outage before it happens.
+    </text>
+    <text x="80" y="404" font-size="21" fill="#94a3b8">
+      Predict cascading failures · trace root causes · optimise recovery
+    </text>
+
+    <g font-family="JetBrains Mono, ui-monospace, monospace" font-size="20" fill="#e2e8f0">
+      <rect x="80" y="446" width="230" height="46" rx="10" fill="#111c2e" stroke="#1e293b" />
+      <text x="100" y="476">100% recall</text>
+      <rect x="330" y="446" width="250" height="46" rx="10" fill="#111c2e" stroke="#1e293b" />
+      <text x="350" y="476">100% origin accuracy</text>
+      <rect x="600" y="446" width="200" height="46" rx="10" fill="#111c2e" stroke="#1e293b" />
+      <text x="620" y="476">75s lead time</text>
+    </g>
+
+    <text x="80" y="560" font-size="18" fill="#64748b" letter-spacing="1.5">
+      ORCATHON 2026 · TRACK 01 SOFTWARE &amp; AI · TYPESCRIPT · REACT · VERCEL
+    </text>
+  </g>
+</svg>
