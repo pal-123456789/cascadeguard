@@ -70,17 +70,20 @@ body {
 /* Scroll isolation for sidebar sub-sections */
 .panel-scroll {
   overflow-y: auto;
-  max-height: 260px;
   scrollbar-width: thin;
-  scrollbar-color: #1e293b transparent;
+  scrollbar-color: #334155 transparent;
 }
 .panel-scroll::-webkit-scrollbar {
-  width: 4px;
+  width: 6px;
 }
 .panel-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0f172a;
+  border-radius: 4px;
 }
 .panel-scroll::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #334155;
   border-radius: 4px;
+}
+.panel-scroll::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
